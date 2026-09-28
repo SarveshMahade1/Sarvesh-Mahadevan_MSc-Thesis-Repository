@@ -1,0 +1,4 @@
+aircraft,t_wall_mm,governed_by,buckling_fos_min,yield_fos_lc7_f90,stability_pressure_bar,design_pressure_bar
+A320,1.571675,yield,inf,1.0196,0.18675,1.50000
+A350,5.674000,buckling,1.5901,1.7983,0.18675,1.50000
+E190,1.288591,yield,1.6575,1.0197,0.18675,1.50000

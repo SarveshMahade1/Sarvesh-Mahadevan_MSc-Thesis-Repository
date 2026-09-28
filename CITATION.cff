@@ -1,0 +1,37 @@
+# GitHub reads this file and adds a "Cite this repository" button to the repository page.
+cff-version: 1.2.0
+message: "If you use this work, please cite the thesis below."
+title: "Digital thread for the thermo-structural analysis of liquid hydrogen tanks: model, scripts and results"
+abstract: >-
+  Parametric Abaqus model, requirement-derivation scripts, post-processing and
+  complete results of an MSc thesis on liquid hydrogen tanks for three aircraft
+  classes (Embraer E190, Airbus A320neo, Airbus A350-900). The inner wall of each
+  tank is sized against yield at 1.5 bar and buckling at 0.187 bar, and analysed
+  under four CS-25 load conditions at five fill ratios at both pressures: 120
+  coupled heat transfer and static cases, plus 18 mesh-convergence cases.
+type: software
+authors:
+  - family-names: Mahadevan
+    given-names: Sarveshwaran
+    affiliation: "Delft University of Technology"
+license: MIT
+repository-code: "https://github.com/SarveshMahade1/Sarvesh-Mahadevan_MSc-Thesis-Repository"
+keywords:
+  - liquid hydrogen
+  - cryogenic tank
+  - thermo-structural analysis
+  - finite element analysis
+  - digital thread
+  - CS-25
+preferred-citation:
+  type: thesis
+  title: >-
+    Development of a Digital Thread of a Liquid Hydrogen Tank Integrating
+    Thermo-Structural Analysis
+  authors:
+    - family-names: Mahadevan
+      given-names: Sarveshwaran
+  thesis-type: "MSc thesis"
+  institution:
+    name: "Delft University of Technology"
+  year: 2026

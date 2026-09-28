@@ -1,0 +1,425 @@
+{
+ "E190": {
+  "membrane": {
+   "hoop_theory_MPa": 151.5026878194866,
+   "axial_theory_MPa": 75.7513439097433,
+   "vm_theory_MPa": 131.20517639329861,
+   "hoop_probe_MPa": 151.456896,
+   "axial_probe_MPa": 74.63816,
+   "hoop_mean_MPa": 151.542340968121,
+   "axial_mean_MPa": 75.7526569345727,
+   "surface_diff_hoop_pct": 0.04669315288225261,
+   "hoop_err_pct": -0.030225087188654843,
+   "axial_err_pct": -1.4695236444513016,
+   "ratio_probe": 2.029215296840115
+  },
+  "cap_equator": {
+   "hoop_theory_MPa": -42.420752589456285,
+   "hoop_fe_min_MPa": -50.967272,
+   "pole_theory_MPa": 121.20215025558929
+  },
+  "equilibrium": {
+   "Baseline|0.10": {
+    "mass_kg": 1046.1469659484778,
+    "applied_kN": 10.262701735954568,
+    "reacted_kN": 10.1419201575071,
+    "diff_pct": -1.1768984576870227
+   },
+   "Baseline|0.90": {
+    "mass_kg": 5583.03515547729,
+    "applied_kN": 54.769574875232216,
+    "reacted_kN": 54.7234982581735,
+    "diff_pct": -0.08412812617896186
+   },
+   "LC7_Emergency|0.10": {
+    "mass_kg": 1046.1469659484778,
+    "applied_kN": 115.19854127577649,
+    "reacted_kN": 115.255948058515,
+    "diff_pct": 0.04983290769375569
+   },
+   "LC7_Emergency|0.90": {
+    "mass_kg": 5583.03515547729,
+    "applied_kN": 614.7869532071434,
+    "reacted_kN": 614.167753846289,
+    "diff_pct": -0.10071771328656762
+   }
+  },
+  "head": {
+   "baseline_depth_m": 2.1908583333333334,
+   "baseline_head_over_p": 0.010144375157999999,
+   "lc7_depth_m": 11.446818426471522,
+   "lc7_head_over_p": 0.5949508269571016,
+   "lc7_extent_m": 13.229018785249796,
+   "hoop_membrane_at_deepest_MPa": 241.63933722391374,
+   "fe_farfield_vm_MPa": 256.933472
+  },
+  "beam_axial_pmin": {
+   "w_N_per_m": 23560.128415492858,
+   "M_mid_kNm": 143.63657306137938,
+   "sigma_bend_MPa": 20.946512424280748,
+   "sigma_pressure_MPa": 9.431042316763039,
+   "sigma_x_min_est_MPa": -11.515470107517709,
+   "sigma_x_min_fe_MPa": -5.945476,
+   "sigma_cr_MPa": 9.854332996331035
+  },
+  "forward_inertia": {
+   "F_kN": 450.63209053518614,
+   "forward_half_tension_MPa": 42.76445887811038,
+   "mean_axial_rise_pred_MPa": 21.38222943905519,
+   "mean_axial_rise_fe_MPa": 21.041379060223136
+  },
+  "section_distortion": {
+   "beam_deflection_mm": 0.46435037605464524,
+   "range_from_translation_mm": 0.9287007521092905,
+   "range_fe_mm": 3.5891187152390205,
+   "translation_share": 0.2587545371977039
+  },
+  "thermal": {
+   "q_Wm2": 5.386417336767737,
+   "dT_asymptote_K": 3.6893269429916007,
+   "dT_fe_f10_K": 3.6833610534668,
+   "dT_fe_f90_K": 3.43248558044434,
+   "fin_length_m": 0.3199706279328245,
+   "through_thickness_drop_K": 5.983524915864547e-05,
+   "wall_flux_est_Wm2": 1337.5037832437329,
+   "wall_flux_fe_f90_Wm2": 1317.26772183052,
+   "wall_flux_fe_f10_Wm2": 1567.08041041145
+  },
+  "thermal_bowing": {
+   "curvature_per_m": 3.155549423446394e-05,
+   "bow_mm": 0.7695243375865444,
+   "F_thermal_kN": 8.843464112156097,
+   "F_mid_mechanical_kN": 6.3387000984419375,
+   "F_mid_est_kN": -2.5047640137141594,
+   "F_mid_fe_kN": -1.7734266469776303
+  },
+  "decay": {
+   "sqrt_Rt_mm": 40.95242589273559,
+   "pi_over_beta_m": 0.10061612354974887,
+   "exclusion_in_decay_lengths": 4.969382464359987,
+   "attenuation_at_exclusion": 1.6591745307353415e-07
+  },
+  "cooldown": {
+   "contraction_strain": 0.004153729097151567,
+   "free_axial_contraction_mm": 64.77480918939298,
+   "uniaxial_restrained_MPa": 303.63759700177957,
+   "biaxial_restrained_MPa": 453.1904432862382,
+   "free_axial_contraction_RT_alpha_mm": 94.83266919375
+  },
+  "binning": {
+   "bin_width_K": 0.15347337722778334
+  },
+  "vacuum_intact": {
+   "p_min_vacuum_intact_bar": 1.2,
+   "p_max_vacuum_intact_bar": 1.448,
+   "design_margin_over_relief_pct": 3.5911602209944826,
+   "axial_added_MPa": 51.1700328110316,
+   "axial_min_loss_of_vacuum_MPa": -5.945476,
+   "axial_min_vacuum_intact_MPa": 45.2245568110316
+  },
+  "cryogenic_properties": {
+   "alpha_secant_6061_per_K": 6.979046476253865e-07,
+   "alpha_ratio_RT_over_cryo": 31.952789074948168,
+   "kappa_6061_293K": 154.3452056507204,
+   "kappa_6061_20K": 28.83139671726102,
+   "kappa_ratio": 5.3533724766901685,
+   "fin_length_cryo_m": 0.13829178512838303,
+   "E_6061_293K_GPa": 70.35859218272911,
+   "E_6061_20K_GPa": 77.8082735732505,
+   "F_thermal_cryo_kN": 0.2767665786987467,
+   "F_mid_est_cryo_kN": 6.0619335197431905
+  },
+  "thermal_bound": {
+   "sigma_thermal_max_MPa": 8.976242581461042,
+   "axial_min_vacuum_intact_lower_bound_MPa": 36.24831422957055,
+   "buckling_fos_vacuum_intact_lower_bound": Infinity
+  },
+  "peak_ratio": {
+   "min": 1.0596886260899563,
+   "max": 1.071396530074026,
+   "spread_pct": 1.098773922778789
+  }
+ },
+ "A320": {
+  "membrane": {
+   "hoop_theory_MPa": 163.01080057900012,
+   "axial_theory_MPa": 81.50540028950006,
+   "vm_theory_MPa": 141.1714943926532,
+   "hoop_probe_MPa": 162.95320800000002,
+   "axial_probe_MPa": 80.923812,
+   "hoop_mean_MPa": 163.071506248068,
+   "axial_mean_MPa": 81.5091458365738,
+   "surface_diff_hoop_pct": 0.016878464890358776,
+   "hoop_err_pct": -0.035330529508190274,
+   "axial_err_pct": -0.71355798196722,
+   "ratio_probe": 2.0136620355946655
+  },
+  "cap_equator": {
+   "hoop_theory_MPa": -45.64302416212007,
+   "hoop_fe_min_MPa": -53.184456,
+   "pole_theory_MPa": 130.4086404632001
+  },
+  "equilibrium": {
+   "Baseline|0.10": {
+    "mass_kg": 1348.4028910575416,
+    "applied_kN": 13.227832361274483,
+    "reacted_kN": 13.095348545432099,
+    "diff_pct": -1.00155348377593
+   },
+   "Baseline|0.90": {
+    "mass_kg": 7284.454643942556,
+    "applied_kN": 71.46050005707649,
+    "reacted_kN": 71.3986546293199,
+    "diff_pct": -0.08654491321385033
+   },
+   "LC7_Emergency|0.10": {
+    "mass_kg": 1348.4028910575416,
+    "applied_kN": 148.48204999671017,
+    "reacted_kN": 148.113173210935,
+    "diff_pct": -0.24843190525948713
+   },
+   "LC7_Emergency|0.90": {
+    "mass_kg": 7284.454643942556,
+    "applied_kN": 802.1421237033596,
+    "reacted_kN": 801.147840155478,
+    "diff_pct": -0.12395353871845119
+   }
+  },
+  "head": {
+   "baseline_depth_m": 2.8751333333333333,
+   "baseline_head_over_p": 0.013312787376,
+   "lc7_depth_m": 9.030926456474381,
+   "lc7_head_over_p": 0.4693843270059113,
+   "lc7_extent_m": 10.69162973391612,
+   "hoop_membrane_at_deepest_MPa": 239.52551550346888,
+   "fe_farfield_vm_MPa": 257.334272
+  },
+  "beam_axial_pmin": {
+   "w_N_per_m": 39464.19753858993,
+   "M_mid_kNm": 123.62177637852189,
+   "sigma_bend_MPa": 8.582358057224482,
+   "sigma_pressure_MPa": 10.147422336042757,
+   "sigma_x_min_est_MPa": 1.5650642788182747,
+   "sigma_x_min_fe_MPa": 1.7094375,
+   "sigma_cr_MPa": 8.795609023809838
+  },
+  "forward_inertia": {
+   "F_kN": 589.6057604199951,
+   "forward_half_tension_MPa": 34.95676525476985,
+   "mean_axial_rise_pred_MPa": 17.478382627384924,
+   "mean_axial_rise_fe_MPa": 17.080891940284047
+  },
+  "section_distortion": {
+   "beam_deflection_mm": 0.07449057647120669,
+   "range_from_translation_mm": 0.14898115294241338,
+   "range_fe_mm": 2.0020354626621097,
+   "translation_share": 0.0744148421548502
+  },
+  "thermal": {
+   "q_Wm2": 6.790601344833595,
+   "dT_asymptote_K": 4.65109681152986,
+   "dT_fe_f10_K": 4.64417839050293,
+   "dT_fe_f90_K": 4.46718215942383,
+   "fin_length_m": 0.35337346847093387,
+   "through_thickness_drop_K": 9.200533076414949e-05,
+   "wall_flux_est_Wm2": 1526.790430736148,
+   "wall_flux_fe_f90_Wm2": 1488.98346056953,
+   "wall_flux_fe_f10_Wm2": 1801.0043408449
+  },
+  "thermal_bowing": {
+   "curvature_per_m": 3.031767509022697e-05,
+   "bow_mm": 0.3798810145986956,
+   "F_thermal_kN": 32.67532362305362,
+   "F_mid_mechanical_kN": 8.184592840895062,
+   "F_mid_est_kN": -24.490730782158558,
+   "F_mid_fe_kN": -11.406864133834802
+  },
+  "decay": {
+   "sqrt_Rt_mm": 51.81139739478178,
+   "pi_over_beta_m": 0.12729555936961545,
+   "exclusion_in_decay_lengths": 3.92786678872434,
+   "attenuation_at_exclusion": 4.374328884562118e-06
+  },
+  "cooldown": {
+   "contraction_strain": 0.004153729097151567,
+   "free_axial_contraction_mm": 50.45534734310009,
+   "uniaxial_restrained_MPa": 303.63759700177957,
+   "biaxial_restrained_MPa": 453.1904432862382,
+   "free_axial_contraction_RT_alpha_mm": 73.86845787
+  },
+  "binning": {
+   "bin_width_K": 0.19350743293762088
+  },
+  "vacuum_intact": {
+   "p_min_vacuum_intact_bar": 1.2,
+   "p_max_vacuum_intact_bar": 1.448,
+   "design_margin_over_relief_pct": 3.5911602209944826,
+   "axial_added_MPa": 55.05689789555729,
+   "axial_min_loss_of_vacuum_MPa": 1.7094375,
+   "axial_min_vacuum_intact_MPa": 56.76633539555729
+  },
+  "cryogenic_properties": {
+   "alpha_secant_6061_per_K": 7.756006029016204e-07,
+   "alpha_ratio_RT_over_cryo": 28.75191163670176,
+   "kappa_6061_293K": 154.3452056507204,
+   "kappa_6061_20K": 28.83139671726102,
+   "kappa_ratio": 5.3533724766901685,
+   "fin_length_cryo_m": 0.152728542890235,
+   "E_6061_293K_GPa": 70.35859218272911,
+   "E_6061_20K_GPa": 77.8082735732505,
+   "F_thermal_cryo_kN": 1.1364574305850201,
+   "F_mid_est_cryo_kN": 7.048135410310042
+  },
+  "thermal_bound": {
+   "sigma_thermal_max_MPa": 11.316257381162941,
+   "axial_min_vacuum_intact_lower_bound_MPa": 45.45007801439435,
+   "buckling_fos_vacuum_intact_lower_bound": Infinity
+  },
+  "peak_ratio": {
+   "min": 1.0686478050908108,
+   "max": 1.0949295336589904,
+   "spread_pct": 2.4294697580227167
+  }
+ },
+ "A350": {
+  "membrane": {
+   "hoop_theory_MPa": 68.12918575960522,
+   "axial_theory_MPa": 34.06459287980261,
+   "vm_theory_MPa": 59.00160560696714,
+   "hoop_probe_MPa": 68.048352,
+   "axial_probe_MPa": 31.558551,
+   "hoop_mean_MPa": 68.1591833315227,
+   "axial_mean_MPa": 34.065152742491,
+   "surface_diff_hoop_pct": 0.019021768521286595,
+   "hoop_err_pct": -0.11864776997401659,
+   "axial_err_pct": -7.3567351550192095,
+   "ratio_probe": 2.1562571741649355
+  },
+  "cap_equator": {
+   "hoop_theory_MPa": -19.07617201268948,
+   "hoop_fe_min_MPa": -25.64533,
+   "pole_theory_MPa": 54.50334860768418
+  },
+  "equilibrium": {
+   "Baseline|0.10": {
+    "mass_kg": 15198.80039822718,
+    "applied_kN": 149.10023190660866,
+    "reacted_kN": 148.310646958023,
+    "diff_pct": -0.5295665462681676
+   },
+   "Baseline|0.90": {
+    "mass_kg": 57709.20255503169,
+    "applied_kN": 566.1272770648609,
+    "reacted_kN": 566.298365853311,
+    "diff_pct": 0.03022090533018155
+   },
+   "LC7_Emergency|0.10": {
+    "mass_kg": 15198.80039822718,
+    "applied_kN": 1673.6459522492098,
+    "reacted_kN": 1673.8605253073301,
+    "diff_pct": 0.012820695908352546
+   },
+   "LC7_Emergency|0.90": {
+    "mass_kg": 57709.20255503169,
+    "applied_kN": 6354.762924251863,
+    "reacted_kN": 6348.4606108445405,
+    "diff_pct": -0.09917464242876946
+   }
+  },
+  "head": {
+   "baseline_depth_m": 4.338118333333333,
+   "baseline_head_over_p": 0.020086876081199998,
+   "lc7_depth_m": 27.108394747551905,
+   "lc7_head_over_p": 1.40896459362351,
+   "lc7_extent_m": 31.139342615932836,
+   "hoop_membrane_at_deepest_MPa": 164.12079628728804,
+   "fe_farfield_vm_MPa": 145.689936
+  },
+  "beam_axial_pmin": {
+   "w_N_per_m": 102514.74647784399,
+   "M_mid_kNm": 3665.1039356039905,
+   "sigma_bend_MPa": 30.958830677341982,
+   "sigma_pressure_MPa": 4.241041813535425,
+   "sigma_x_min_est_MPa": -26.717788863806557,
+   "sigma_x_min_fe_MPa": -20.85097,
+   "sigma_cr_MPa": 33.155058459052995
+  },
+  "forward_inertia": {
+   "F_kN": 4222.398832227304,
+   "forward_half_tension_MPa": 45.957752504199604,
+   "mean_axial_rise_pred_MPa": 22.978876252099802,
+   "mean_axial_rise_fe_MPa": 22.66894125437061
+  },
+  "section_distortion": {
+   "beam_deflection_mm": 2.0325633928772935,
+   "range_from_translation_mm": 4.065126785754587,
+   "range_fe_mm": 12.40402117049792,
+   "translation_share": 0.32772652754118164
+  },
+  "thermal": {
+   "q_Wm2": 10.769475720258857,
+   "dT_asymptote_K": 7.376353233054012,
+   "dT_fe_f10_K": 7.36367988586426,
+   "dT_fe_f90_K": 6.7705135345459,
+   "fin_length_m": 0.6714245742480012,
+   "through_thickness_drop_K": 0.0005267759072133514,
+   "wall_flux_est_Wm2": 1274.3903155355988,
+   "wall_flux_fe_f90_Wm2": 1284.01947805301,
+   "wall_flux_fe_f10_Wm2": 1520.89222888244
+  },
+  "thermal_bowing": {
+   "curvature_per_m": 3.185946634875887e-05,
+   "bow_mm": 4.556154485591616,
+   "F_thermal_kN": 126.041968042723,
+   "F_mid_mechanical_kN": 92.69415434876437,
+   "F_mid_est_kN": -33.34781369395863,
+   "F_mid_fe_kN": -29.77568048095729
+  },
+  "decay": {
+   "sqrt_Rt_mm": 120.92338648913203,
+   "pi_over_beta_m": 0.2970969882690827,
+   "exclusion_in_decay_lengths": 1.6829520989527726,
+   "attenuation_at_exclusion": 0.0050561500224623876
+  },
+  "cooldown": {
+   "contraction_strain": 0.004153729097151567,
+   "free_axial_contraction_mm": 153.87645205239124,
+   "uniaxial_restrained_MPa": 303.63759700177957,
+   "biaxial_restrained_MPa": 453.1904432862382,
+   "free_axial_contraction_RT_alpha_mm": 225.28070490374998
+  },
+  "binning": {
+   "bin_width_K": 0.30681999524434583
+  },
+  "vacuum_intact": {
+   "p_min_vacuum_intact_bar": 1.2,
+   "p_max_vacuum_intact_bar": 1.448,
+   "design_margin_over_relief_pct": 3.5911602209944826,
+   "axial_added_MPa": 23.010632490306666,
+   "axial_min_loss_of_vacuum_MPa": -20.85097,
+   "axial_min_vacuum_intact_MPa": 2.1596624903066655
+  },
+  "cryogenic_properties": {
+   "alpha_secant_6061_per_K": 9.947556654240584e-07,
+   "alpha_ratio_RT_over_cryo": 22.417565212351562,
+   "kappa_6061_293K": 154.3452056507204,
+   "kappa_6061_20K": 28.83139671726102,
+   "kappa_ratio": 5.3533724766901685,
+   "fin_length_cryo_m": 0.29019070766493704,
+   "E_6061_293K_GPa": 70.35859218272911,
+   "E_6061_20K_GPa": 77.8082735732505,
+   "F_thermal_cryo_kN": 5.62246465433618,
+   "F_mid_est_cryo_kN": 87.07168969442819
+  },
+  "thermal_bound": {
+   "sigma_thermal_max_MPa": 17.946887605669158,
+   "axial_min_vacuum_intact_lower_bound_MPa": -15.787225115362492,
+   "buckling_fos_vacuum_intact_lower_bound": 2.1001194457403365
+  },
+  "peak_ratio": {
+   "min": 0.8799483733324585,
+   "max": 0.948444835605893,
+   "spread_pct": 7.4925308121448015
+  }
+ }
+}
