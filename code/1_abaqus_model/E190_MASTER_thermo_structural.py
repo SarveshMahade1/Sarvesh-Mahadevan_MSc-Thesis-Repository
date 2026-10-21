@@ -254,9 +254,9 @@ import random
 # ---------------------------------------------------------------------------
 # WORKING DIRECTORY
 # ---------------------------------------------------------------------------
-# This script lives in files\python_scripts\ but Abaqus should write its .odb,
-# .dat, .msg and the results .csv into the parent files\ folder, so the outputs
-# sit alongside the LaTeX and the changelog rather than among the source.
+# This script lives in code/1_abaqus_model/ but Abaqus should write its .odb,
+# .dat, .msg and the results .csv into the working folder, so the outputs
+# never mix with the source.
 #
 # Pinning it here means the script can be launched from anywhere - directly via
 # File -> Run Script, or through E190_CHECK_smoketest.py - and the outputs
@@ -276,10 +276,10 @@ import random
 #          export E190_WORKDIR=/scratch/<netid>/e190
 #   2. The parent of the directory holding this file, when __file__ exists
 #      (true for `abaqus cae noGUI=...`, false for File -> Run Script).
-#   3. The hard-coded Windows path.
+#   3. The current working directory (File -> Run Script).
 #   4. The current directory, if none of the above is a real directory. On a
 #      cluster this is the SLURM submission directory, which is correct.
-_THESIS_DIR = r'C:\Users\hrish\Thesis_Code\files'
+_THESIS_DIR = os.getcwd()
 _SCRIPT_DIR = None
 try:
     _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -369,7 +369,7 @@ AIRCRAFT = 'E190'            # 'E190' | 'A320' | 'A350'
 # the command line without editing this file:
 #
 #     set E190_AIRCRAFT=A320
-#     abaqus cae noGUI=python_scripts\E190_MASTER_thermo_structural.py
+#     abaqus cae noGUI=code/1_abaqus_model/E190_MASTER_thermo_structural.py
 #
 # CASE_TAG follows AIRCRAFT, so each aircraft writes its own results CSV.
 #
@@ -392,7 +392,7 @@ AIRCRAFT = os.environ.get('E190_AIRCRAFT', AIRCRAFT).strip() or AIRCRAFT
 # sizing runs that put the design pressure on SIDE1 of their shell surfaces,
 # the OUTER face on those meshes, so the tank was squeezed rather than
 # pressurised and the buckling screen sized against a hoop compression of
-# -pR/t that does not exist in service. See python_scripts/sizing_closed_form.py.
+# -pR/t that does not exist in service. See code/2_requirements_and_sizing/sizing_closed_form.py.
 # The values below are the corrected closed-form sizing (buckling at the
 # minimum pressure governs, FOS 1.50). RUN_MODE='SIZING' verifies and, if
 # needed, adjusts them with THIS model; update them here with its result.
@@ -697,7 +697,7 @@ load_cases = {
 # HOW TO USE - four Command Prompt windows, one line each:
 #
 #     set E190_ONLY_LC=Baseline
-#     abaqus cae noGUI=python_scripts\E190_MASTER_thermo_structural.py
+#     abaqus cae noGUI=code/1_abaqus_model/E190_MASTER_thermo_structural.py
 #
 # then the same with LC1_Maneuver, LC3_Combined, LC7_Emergency. Each session
 # writes its own CSV, named after the filter, so nothing is overwritten:
@@ -2603,7 +2603,8 @@ if RUN_MODE == 'FINAL':
     print('\n' + '=' * 78)
     print('FINAL SESSION COMPLETE FOR %s at t = %.3f mm (stages: %s)'
           % (CASE_TAG, t_wall * 1e3, ', '.join(STAGES)))
-    print('Now run:  abaqus python python_scripts\\check_campus_outputs.py')
+    print('Next: copy the *_results.csv files into results/ and run '
+          'python code/3_results_processing/final_numbers.py')
     print('=' * 78)
 
 

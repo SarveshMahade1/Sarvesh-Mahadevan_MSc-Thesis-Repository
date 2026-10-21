@@ -10,7 +10,7 @@ frame in a set is directly comparable with every other.
 
 RUN IT WITH (from the thesis root, the folder containing E190\\ A320\\ A350\\):
 
-    abaqus cae noGUI=python_scripts\\ABAQUS_capture_all.py
+    abaqus cae noGUI=code/1_abaqus_model/ABAQUS_capture_all.py
 
 Do NOT use "abaqus python" - that has no graphics context and cannot print
 images. It must be "abaqus cae noGUI=..." (or "abaqus viewer noGUI=...").
@@ -79,12 +79,19 @@ import math
 #    taken from the production CSVs at run time. See contour_windows().
 # 3. LEGEND NEVER COVERS THE TANK. For the views in SIDE_LEGEND_VIEWS each frame
 #    is rendered twice, legend on and legend off, into <OUT_ROOT>\_raw. Then
-#        python python_scripts\compose_side_legend.py
+#        python code/4_figures_and_drawings/compose_side_legend.py
 #    cuts the legend out (it is exactly where the two renders differ), cuts the
 #    tank out of the legend-off render, and places them side by side. Overlap
 #    is impossible by construction, whatever the tank shape.
 # 4. Output goes to a NEW folder, abaqus_captures_final, so nothing rendered from
 #    the old ODBs can be picked up by mistake.
+# 5. FINAL REPORT. The contour figures of the final report are built from the
+#    single captures (legend and tank in one image) kept in
+#    abaqus_contour_captures_report/, by
+#        python code/4_figures_and_drawings/make_report_contours.py abaqus_contour_captures_report thesis_figures
+#    which replaces the Abaqus legend by a vector colour bar. The side-legend
+#    route of item 3 (compose_side_legend.py, make_contour_panels.py) belongs
+#    to the earlier draft and is kept for the record.
 # ==============================================================================
 
 # ==============================================================================
@@ -366,7 +373,7 @@ def open_odb(path):
 #                old-thickness ODBs and must never be read.
 ODB_DIRS = {'E190': ['.'], 'A320': ['.'], 'A350': ['.']}   # 27 Sep: all current ODBs are in the root
 
-MASTER_SCRIPT = os.path.join('python_scripts', 'E190_MASTER_thermo_structural.py')
+MASTER_SCRIPT = os.path.join('code', '1_abaqus_model', 'E190_MASTER_thermo_structural.py')
 try:    # repository layout: the master script sits next to this one
     MASTER_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'E190_MASTER_thermo_structural.py')
 except NameError:
@@ -1074,7 +1081,7 @@ def main():
         log('')
         log('  NEXT: the %s frames are still raw. Assemble them with' %
             '/'.join(SIDE_LEGEND_VIEWS))
-        log('      python python_scripts\\compose_side_legend.py')
+        log('      python code/4_figures_and_drawings/compose_side_legend.py')
     log('  output root: %s' % os.path.join(ROOT, OUT_ROOT))
     if QUICK_TEST:
         log('')

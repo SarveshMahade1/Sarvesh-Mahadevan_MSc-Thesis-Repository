@@ -179,74 +179,63 @@ def main():
         print(row)
     print("=" * 96)
 
-    # ---------------- figure ----------------
-    NAVY, RED, GREEN, GREY = '#1F3864', '#C00000', '#2E7D32', '#595959'
-    colours = {'E190': NAVY, 'A320': GREEN, 'A350-900': RED}
-    NAVY = 'black'
+    plot_per_aircraft(results, hold_h)
 
-    fig, axes = plt.subplots(1, 3, figsize=(455.24 / 72.27, 2.9))
 
-    # (a) allowable heat leak
-    ax = axes[0]
-    for n, r in results.items():
-        ax.plot(hold_h, r['Q'] / 1000.0, lw=1.3, color=colours[n], label=n)
-        ax.plot([T_HOLD_DESIGN_H], [r['Q_d'] / 1000.0], 'o', ms=4,
-                color=colours[n], zorder=5)
-    ax.set_yscale('log')
-    ax.set_xlabel('Hold time $t_{hold}$ [h]')
-    ax.set_ylabel('Allowable heat leak $Q$ [kW]')
-    ax.set_title('(a) Heat-leak budget', loc='left', fontsize=9.5)
-    ax.grid(alpha=0.3, which='both')
-    pass
-
-    # (b) required MLI thickness
-    ax = axes[1]
-    for n, r in results.items():
-        ax.plot(hold_h, r['t'], lw=1.3, color=colours[n], label=n)
-        ax.plot([T_HOLD_DESIGN_H], [r['t_d']], 'o', ms=4, color=colours[n], zorder=5)
-    ax.set_xlabel('Hold time $t_{hold}$ [h]')
-    ax.set_ylabel('MLI thickness [mm]')
-    ax.set_title('(b) MLI thickness', loc='left', fontsize=9.5)
-    ax.grid(alpha=0.3)
-
-    # (c) blanket mass
-    ax = axes[2]
-    for n, r in results.items():
-        ax.plot(hold_h, r['m'], lw=1.3, color=colours[n], label=n)
-        ax.plot([T_HOLD_DESIGN_H], [r['m_d']], 'o', ms=4, color=colours[n], zorder=5)
-    ax.set_yscale('log')
-    ax.set_xlabel('Hold time $t_{hold}$ [h]')
-    ax.set_ylabel('MLI mass [kg]')
-    ax.set_title('(c) MLI mass', loc='left', fontsize=9.5)
-    ax.grid(alpha=0.3, which='both')
-
-    for ax in axes:
-        ax.axvline(T_HOLD_DESIGN_H, color=GREY, ls='--', lw=1.2, zorder=1)
-        pass
-
-# --- moved to the LaTeX caption; the figure carries labelling only
-#     fig.suptitle('Sensitivity of the Insulation Design to the Required No-Vent Hold Time',
-#                  fontsize=15, fontweight='bold', color=NAVY, y=0.975)
-# --- moved to the LaTeX caption; the figure carries labelling only
-#     fig.text(0.5, 0.865,
-#              'The heat-leak budget follows from a constant-volume energy balance between '
-#              'the fill pressure (1.2 bar) and the venting pressure (1.448 bar).\n'
-#              'The adopted hold time of 14.68 h reproduces the 0.1 %/hr figure used '
-#              'throughout the thesis, and is identical for all three aircraft.',
-#              ha='center', fontsize=9.5, color=GREY)
-
+def plot_per_aircraft(results, hold_h):
+    """Figure 17 (October 2026): one column per aircraft, each with its own
+    scales. Top row: allowable heat leak Q against the hold time. Bottom row:
+    the MLI thickness that delivers exactly that Q. The points at 6, 14.7, 24
+    and 36 h carry their values; the note gives the constant energy Q t_hold
+    that the contents can absorb between 1.2 and 1.448 bar, and the blanket
+    mass at the adopted and at the 24 h hold time."""
+    from matplotlib.ticker import MaxNLocator
+    colours = {'E190': tfs.AC_COLOR['E190'], 'A320': tfs.AC_COLOR['A320'], 'A350-900': tfs.AC_COLOR['A350']}
+    marks = [6.0, T_HOLD_DESIGN_H, 24.0, 36.0]
+    import json
+    FN = json.load(open(os.path.join(RP.PROCESSED, 'final_numbers.json')))
+    QBUDGET = {'E190': FN['E190']['Q_W'], 'A320': FN['A320']['Q_W'], 'A350-900': FN['A350']['Q_W']}
+    fig, axs = plt.subplots(2, 3, figsize=(455.24 / 72.27, 4.5))
+    for k, (n, r) in enumerate(results.items()):
+        col = colours[n]
+        # The budget of the report (Table 3.4, final_numbers.json) anchors the
+        # curve: Q t_hold is constant, so Q(t) = Q_budget * 14.68 / t. The
+        # CoolProp state of this script gives a budget 0.03 % different.
+        Qd = QBUDGET[n]
+        Qk = Qd * T_HOLD_DESIGN_H / hold_h
+        Qm = [Qd * T_HOLD_DESIGN_H / m for m in marks]
+        tm = [1000.0 * required_mli_thickness(r['R'], r['L'], q)[0] for q in Qm]
+        top, bot = axs[0, k], axs[1, k]
+        top.plot(hold_h, Qk, color=col, lw=1.4)
+        tk = np.array([1000.0 * required_mli_thickness(r['R'], r['L'], q)[0] for q in Qk])
+        bot.plot(hold_h, tk, color=col, lw=1.4)
+        top.plot(marks, Qm, 'o', color=col, ms=4)
+        bot.plot(marks, tm, 'o', color=col, ms=4)
+        tfs.label_points(top, marks, Qm, col, '%.0f', side='ur')
+        tfs.label_points(bot, marks, tm, col, '%.1f', side='lr')
+        for ax in (top, bot):
+            ax.axvline(T_HOLD_DESIGN_H, color='0.4', ls='--', lw=0.9, zorder=1)
+            ax.axvline(24.0, color='0.4', ls=':', lw=0.9, zorder=1)
+            ax.grid(True)
+            ax.yaxis.set_major_locator(MaxNLocator(5))
+        E_MJ = Qd * T_HOLD_DESIGN_H * 3600.0 / 1e6
+        tfs.note(top, 'Heat absorbed\nbefore venting: %.1f MJ' % E_MJ, loc='ur')
+        tfs.note(bot, 'MLI mass %.0f kg at 14.7 h,\n%.0f kg at 24 h' % (required_mli_thickness(r['R'], r['L'], Qd)[1], required_mli_thickness(r['R'], r['L'], Qd * T_HOLD_DESIGN_H / 24.0)[1]), loc='ul')
+        top.set_ylim(0, 1.6 * Qd * T_HOLD_DESIGN_H / 4.5)
+        top.set_xlim(2, 38)
+        bot.set_ylim(0, 1.4 * tk.max())
+        top.set_title('(%s) %s' % ('abc'[k], n), loc='left', fontsize=9.5)
+        bot.set_title('(%s) %s' % ('def'[k], n), loc='left', fontsize=9.5)
+        for ax in (top, bot):     # every panel carries both axis labels
+            ax.set_xlabel(r'No-vent hold time $t_{\mathrm{hold}}$ [h]')
+            ax.set_xticks([6, 14.68, 24, 36])
+            ax.set_xticklabels(['6', '14.7', '24', '36'])
+            ax.set_xlim(3, 38)
+        top.set_ylabel('Allowable heat leak, $Q$ [W]')
+        bot.set_ylabel('Required MLI insulation\nthickness [mm]')
+    fig.tight_layout(h_pad=1.0, w_pad=1.2)
     out = os.path.join(RP.FIGURES, '17_boiloff_holdtime_sensitivity.png')
-    d = os.path.dirname(out)
-    if not os.path.isdir(d):
-        os.makedirs(d)
-    from matplotlib.lines import Line2D
-    hs = [Line2D([], [], color=colours[n], lw=1.3, marker='o', ms=4) for n in results] + \
-         [Line2D([], [], color=GREY, ls='--', lw=1.2)]
-    fig.legend(hs, list(results) + ['Adopted hold time, %.1f h (dots: design point)' % T_HOLD_DESIGN_H],
-               loc='lower center', ncol=4, frameon=False, bbox_to_anchor=(0.5, 0.0), fontsize=9)
-    fig.tight_layout(rect=(0, 0.12, 1, 1), w_pad=0.8)
     tfs.save(fig, out)
-    print("\nFigure written to %s" % out)
 
 
 if __name__ == '__main__':
