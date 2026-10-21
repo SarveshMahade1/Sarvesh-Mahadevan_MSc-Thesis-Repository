@@ -17,29 +17,35 @@ Ring-stiffened jacket: Windenburg and Trilling (1934), ring spacing L
 Both solved for t with p_cr / FOS = 1 atm, FOS 1.5, aluminium E = 73.1 GPa.
 
 Jacket radius = inner-vessel mid-surface radius + half the inner wall + the
-evacuated MLI gap (14.93 mm, appendix entry 34). The inner wall is read from
-sized_walls.csv when it exists, so the jacket follows the sized vessel; its
-effect on the result is below 0.1 mm.
+evacuated MLI gap of that aircraft. The sized inner walls are read from
+results/sized_walls.csv and the MLI thicknesses from
+results/processed/insulation.json (written by insulation_sizing.py), so the
+jacket follows the sized vessel and its own blanket.
 
-RUN (from the thesis root):   python python_scripts\\outer_jacket_closed_form.py
+RUN (from anywhere):   python code/2_requirements_and_sizing/outer_jacket_closed_form.py
 ================================================================================
 """
 import csv
+import json
 import math
 import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import repo_paths as RP  # noqa: E402
 
 E, NU, P_EXT, FOS = 73.1e9, 0.33, 101325.0, 1.5
-MLI = 14.93e-3
 R_MID = {'E190': 1.3015, 'A320': 1.7080, 'A350': 2.5771}
-T_WALL = {'E190': 4.785e-3, 'A320': 7.440e-3, 'A350': 15.250e-3}
-if os.path.exists('sized_walls.csv'):
-    for r in csv.DictReader(open('sized_walls.csv')):
-        T_WALL[r['aircraft']] = float(r['t_wall_mm']) / 1000.0
+T_WALL = {}
+for r in csv.DictReader(open(RP.SIZED_WALLS)):
+    T_WALL[r['aircraft']] = float(r['t_wall_mm']) / 1000.0
+_INS = json.load(open(os.path.join(RP.PROCESSED, 'insulation.json')))
+MLI = {ac: _INS[ac]['mli_mm'] / 1000.0 for ac in R_MID}
 SPACINGS = (0.25, 0.5, 1.0, 2.0)
 
 
 def r_out(ac):
-    return R_MID[ac] + T_WALL[ac] / 2.0 + MLI
+    return R_MID[ac] + T_WALL[ac] / 2.0 + MLI[ac]
 
 
 def t_unstiffened(ac):

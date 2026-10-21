@@ -2,6 +2,8 @@
 """
 ================================================================================
 PUT THE CONTOUR LEGEND BESIDE THE TANK, NEVER ON IT
+EARLIER DRAFT: part of the side-legend pipeline that make_report_contours.py
+replaced for the final report. Kept for the record.
 TU Delft MSc thesis - Sarvesh Mahadevan
 ================================================================================
 
@@ -25,8 +27,8 @@ The script also checks that the tank does not touch the edge of its render,
 which would mean the camera clipped it; such frames are reported, not hidden.
 
 RUN (normal Python with numpy and Pillow, from the thesis root):
-    python python_scripts\\compose_side_legend.py
-    python python_scripts\\compose_side_legend.py abaqus_captures_final
+    python code/4_figures_and_drawings/compose_side_legend.py
+    python code/4_figures_and_drawings/compose_side_legend.py abaqus_captures_final
 ================================================================================
 """
 import os

@@ -106,4 +106,4 @@ s.addText('No: new t', { x: CX - 1.05, y: dY + dH / 2 - 0.26, w: 1.0, h: 0.22, f
   color: '000000', margin: 0, align: 'right', isTextBox: true });
 s.addText('Yes', { x: CX + CW / 2 + 0.12, y: dY + dH - 0.06, w: 0.5, h: 0.2, fontFace: F, fontSize: 9.5, italic: true,
   color: '000000', margin: 0, isTextBox: true });
-pres.writeFile({ fileName: (process.argv[2] || 'DIAGRAMS_TO_REDRAW/08_digital_thread_detailed.pptx') }).then(() => console.log('ok'));
+pres.writeFile({ fileName: (process.argv[2] || '08_digital_thread_detailed.pptx') }).then(() => console.log('ok'));

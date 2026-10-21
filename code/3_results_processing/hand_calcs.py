@@ -7,8 +7,8 @@ Closed-form physics for every check quoted in the report, evaluated at the
 sized walls and set beside the finite element value from
 results/processed/final_numbers.json. Standard library only:
 
-    python python_scripts/final_numbers.py      (first)
-    python python_scripts/hand_calcs.py
+    python code/3_results_processing/final_numbers.py      (first)
+    python code/3_results_processing/hand_calcs.py
 
 Writes results/processed/hand_calcs.json and prints a readable table.
 

@@ -13,7 +13,7 @@ with every number taken from the results files:
                            and LC7 resultant, from the same volume-sampling
                            rule as the model
 
-    python python_scripts/draw_report_diagrams.py
+    python code/4_figures_and_drawings/draw_report_diagrams.py
 """
 import json
 import math
@@ -120,7 +120,7 @@ def wall_stack():
     ax.add_patch(Wedge((0, 0), 1.04, -12, 12, width=0.34, fc='none', ec='black', lw=1.0))
     ax.set_xlim(-1.1, 1.25)
     ax.set_ylim(-1.1, 1.1)
-    ax.set_title('(a) Section, gap exaggerated', loc='left', fontsize=9)
+    ax.set_title('(a)', loc='left', fontsize=9)
     # (b) true relative thickness
     ax = fig.add_axes([0.36, 0.02, 0.64, 0.84])
     bare(ax)
@@ -141,7 +141,7 @@ def wall_stack():
     ax.text(tot + 0.4, 0.55, '293 K', ha='left', va='center', fontsize=8.5)
     ax.set_xlim(-2.8, tot + 3.0)
     ax.set_ylim(-0.1, 1.28)
-    ax.set_title('(b) E190 wall stack at true relative thickness', loc='left', fontsize=9)
+    ax.set_title('(b)', loc='left', fontsize=9)
     tfs.save(fig, os.path.join(FIG, 'fig3_wall_stack'))
 
 
@@ -202,12 +202,7 @@ def free_surface():
         ax.set_xlim(-h - 0.3, L + h + 0.3)
         ax.set_ylim(-R - 0.25, R + 0.25)
         bare(ax)
-        if key.startswith('Baseline'):
-            ax.set_title('(a) Vertical resultant, 1.0 g: depth %.2f m, head %.1f %% of $p_{\\mathrm{gauge}}$'
-                         % (hd['depth_m'], 100 * hd['head_over_p']), loc='left', fontsize=9)
-        else:
-            ax.set_title('(b) LC7 resultant, 11.22 g tilted %.1f$^\\circ$: depth %.2f m, head %.1f %% of $p_{\\mathrm{gauge}}$'
-                         % (hd['tilt_deg'], hd['depth_m'], 100 * hd['head_over_p']), loc='left', fontsize=9)
+        ax.set_title('(a)' if key.startswith('Baseline') else '(b)', loc='left', fontsize=9)
     fig.tight_layout(pad=0.2, h_pad=0.6)
     tfs.save(fig, os.path.join(FIG, 'fig4_free_surface'))
 

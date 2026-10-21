@@ -19,7 +19,7 @@ Geometry and the free-surface depth are recomputed here from the same
 AIRCRAFT_DATA and the same formulas as the MASTER script.
 
 Run with any Python 3 (standard library only):
-    python python_scripts/final_numbers.py
+    python code/3_results_processing/final_numbers.py
 """
 import csv
 import glob

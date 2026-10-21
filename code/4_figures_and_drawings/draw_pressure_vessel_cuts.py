@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 Where the two cuts are made in a pressurised cylinder, and what each exposes.
-Draft for Sarvesh to redraw. Output: design_drawings/01_pressure_vessel_cuts.{pdf,png}
+Supporting drawing, not a figure of the final report.
+Output: design_drawings/01_pressure_vessel_cuts.{pdf,png}
 """
 import os
 import sys
@@ -18,7 +19,8 @@ import matplotlib.pyplot as plt                        # noqa: E402
 from matplotlib.patches import Ellipse, Polygon, FancyArrowPatch   # noqa: E402
 
 tfs.apply_style()
-OUT = RP.FIGURES
+OUT = RP.DRAWINGS
+os.makedirs(OUT, exist_ok=True)
 WALL, CUT, P = 'black', 'black', 'black'
 FILL = 'white'
 
@@ -51,7 +53,7 @@ ax.text(7.45, 0.12, 'axis $x$', fontsize=7.5, va='bottom')
 # cutting plane seen edge-on: horizontal plane through the axis
 ax.add_patch(Polygon([(-0.6, -0.12), (6.6, -0.12), (6.6, 0.12), (-0.6, 0.12)], fc='none', hatch='////', ec=CUT, lw=0.8))
 ax.text(3.0, -0.35, 'plane contains the axis', color=CUT, fontsize=7.5, ha='center', va='top')
-ax.set_title('(a) Longitudinal cut', loc='left', fontsize=8.5)
+ax.set_title('(a)', loc='left', fontsize=8.5)
 ax.set_xlim(-1.2, 9.4)
 ax.set_ylim(-2.0, 2.0)
 
@@ -63,7 +65,7 @@ arr(ax, (6.6, 0), (7.4, 0), 'k', lw=1.0, ms=9)
 ax.text(7.45, 0.12, 'axis $x$', fontsize=7.5, va='bottom')
 ax.add_patch(Ellipse((3.0, 0), 0.9, 3.1, fc='white', hatch='////', ec=CUT, lw=0.8))
 ax.text(3.0, -1.65, 'plane normal to the axis', color=CUT, fontsize=7.5, ha='center', va='top')
-ax.set_title('(b) Circumferential cut', loc='left', fontsize=8.5)
+ax.set_title('(b)', loc='left', fontsize=8.5)
 ax.set_xlim(-1.2, 9.4)
 ax.set_ylim(-2.0, 2.0)
 

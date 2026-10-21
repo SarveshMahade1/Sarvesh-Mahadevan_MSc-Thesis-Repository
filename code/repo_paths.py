@@ -20,10 +20,12 @@ BENCHMARK = os.path.join(RESULTS, 'benchmark_bagarello')
 DELFTBLUE = os.path.join(RESULTS, 'solver_check_delftblue')
 PROCESSED = os.path.join(RESULTS, 'processed')                 # final_numbers.json, hand_calcs.json, insulation.json
 
-CAPTURES = os.path.join(REPO, 'abaqus_contour_captures')
-FIGURES = os.path.join(REPO, 'thesis_figures')
+CAPTURES_REPORT = os.path.join(REPO, 'abaqus_contour_captures_report')  # captures behind the final contour figures
+CAPTURES = os.path.join(REPO, 'abaqus_contour_captures')       # earlier draft (side-legend pipeline), kept for the record
+FIGURES = os.path.join(REPO, 'thesis_figures')                 # the figures of the final report
 APPENDIX = os.path.join(REPO, 'thesis_appendix')
-DRAWINGS = os.path.join(REPO, 'design_drawings')
+DRAWINGS = os.path.join(REPO, 'design_drawings')               # supporting drawings, created on demand
+EARLIER_DRAFT = os.path.join(REPO, 'earlier_draft_figures')    # output of the earlier-draft scripts, created on demand
 
 # the scripts import one another across the code sub-folders
 for _sub in ('2_requirements_and_sizing', '3_results_processing', '4_figures_and_drawings'):

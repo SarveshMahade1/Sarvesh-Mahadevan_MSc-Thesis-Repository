@@ -17,7 +17,7 @@ heat-leak budget, so that the selection rests on numbers from one script.
                     eps_eff = 1 / (1/eps1 + 1/eps2 - 1). The script returns the
                     emissivity both surfaces would need to meet the budget.
 
-    python python_scripts/insulation_sizing.py
+    python code/2_requirements_and_sizing/insulation_sizing.py
 """
 import json
 import math

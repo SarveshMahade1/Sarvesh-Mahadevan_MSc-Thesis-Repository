@@ -2,6 +2,9 @@
 """
 ================================================================================
 MULTI-AIRCRAFT CONTOUR PANELS FOR CHAPTERS 4, 5 AND THE APPENDIX
+EARLIER DRAFT: superseded by make_report_contours.py, which produced the
+contour figures of the final report. Kept for the record. It writes to
+earlier_draft_figures/, so it can never overwrite thesis_figures/.
 TU Delft MSc thesis - Sarvesh Mahadevan
 ================================================================================
 
@@ -22,7 +25,7 @@ Inputs : abaqus_captures_v2\\_raw\\<AC>\\<name>__L.png / __N.png  (contours)
          abaqus_captures_v2\\capture_log.txt                      (element counts)
 Outputs: latex\\figures\\37_... to 40_... and appx_contours_<AC>_*.{pdf,png}
 
-RUN (from the thesis root):   python python_scripts\\make_contour_panels.py
+RUN (from the thesis root):   python code/4_figures_and_drawings/make_contour_panels.py
 ================================================================================
 """
 import os
@@ -45,7 +48,8 @@ import thesis_figstyle as tfs                     # noqa: E402
 import compose_side_legend as csl                 # noqa: E402
 
 CAP = RP.CAPTURES   # 28 Sep: sized walls
-FIGDIR = RP.FIGURES
+FIGDIR = RP.EARLIER_DRAFT   # never RP.FIGURES: the final figures come from make_report_contours.py
+os.makedirs(FIGDIR, exist_ok=True)
 NAVY, GREY = '#000000', '#000000'    # 28 Sep: all figure text black, as in the report
 
 ORDER = ['E190', 'A320', 'A350']                  # table order of the report
@@ -173,7 +177,7 @@ def models_figure(out, width_in=455.24 / 72.27):
         ax.plot([xx, xx], [0.55, 0.95], color='k', lw=1.0)
     ax.text(2.5, 0.05, '5 m', ha='center', va='bottom', fontsize=8.5)
     y -= 0.3 + 0.2
-    fig.text(0.0, (y + 0.15) / total_h, '(b) Production mesh at the mid ring, LC7 Emergency, $\\phi_f$ = 0.90',
+    fig.text(0.0, (y + 0.15) / total_h, '(b) Production mesh at the mid ring, LC7 Emergency, $\\phi_{\\mathrm{f}}$ = 0.90',
              ha='left', va='top', fontsize=10, fontweight='bold')
     y -= lab
     wz = (width_in - 0.2) / 3.0
@@ -209,14 +213,14 @@ def two_fill_panel(case, field, fills, out, label_fmt):
 
 def main():
     tfs.apply_style()
-    lab = r'$\phi_f$ = %.2f'
+    lab = r'$\phi_{\\mathrm{f}}$ = %.2f'
     # Chapter 4: the three models and their meshes
     models_figure('fig4_models')
     # Chapter 5: the three fields of the reference case, each with its legend
     blocks = []
-    for name, title in (('Baseline_f90_nt11', 'Wall temperature NT11 [K], Baseline, $\\phi_f$ = 0.90'),
-                        ('Baseline_f90_hfl', 'Heat flux HFL [W/m$^2$], Baseline, $\\phi_f$ = 0.90'),
-                        ('LC7_Emergency_f90_mises', 'Von Mises stress [Pa], LC7 Emergency, $\\phi_f$ = 0.90')):
+    for name, title in (('Baseline_f90_nt11', 'Wall temperature NT11 [K], Baseline, $\\phi_{\\mathrm{f}}$ = 0.90'),
+                        ('Baseline_f90_hfl', 'Heat flux HFL [W/m$^2$], Baseline, $\\phi_{\\mathrm{f}}$ = 0.90'),
+                        ('LC7_Emergency_f90_mises', 'Von Mises stress [Pa], LC7 Emergency, $\\phi_{\\mathrm{f}}$ = 0.90')):
         leg, tank = frame('E190', name)
         blocks.append((title, leg, [('', tank)]))
     panel(blocks, 'fig5_e190_fields', label_h=0.24)

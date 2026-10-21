@@ -7,19 +7,19 @@ The test case is A350 Baseline at 10 % fill, the smallest production model
 laptop, so the DelftBlue run can be compared number by number.
 
 ON DELFTBLUE (after the upload of the thesis folder):
-    mkdir -p /scratch/$USER/dbtest/python_scripts
-    cp /scratch/$USER/thesis/python_scripts/* /scratch/$USER/dbtest/python_scripts/
+    mkdir -p /scratch/$USER/dbtest/code/1_abaqus_model
+    cp /scratch/$USER/thesis/code/1_abaqus_model/* /scratch/$USER/dbtest/code/1_abaqus_model/
     cp /scratch/$USER/thesis/sized_walls.csv /scratch/$USER/dbtest/
     cd /scratch/$USER/dbtest
     sbatch --job-name=dbtest --time=01:00:00 \
       --export=ALL,WORKDIR=/scratch/$USER/dbtest,AC=A350,STAGE=production,E190_ONLY_LC=Baseline,E190_ONLY_FILL=0.1 \
-      python_scripts/run_final_delftblue.sh
+      code/1_abaqus_model/run_final_delftblue.sh
 
 ON THE LAPTOP, when it has finished (new Command Prompt):
-    cd C:\\Users\\hrish\\Thesis_Code\\files
+    cd <local working folder>
     mkdir delftblue_test
-    scp sarveshmahadev@login.delftblue.tudelft.nl:/scratch/sarveshmahadev/dbtest/A350_production*_results.csv delftblue_test\\
-    abaqus python python_scripts\\compare_delftblue_test.py
+    scp <netid>@login.delftblue.tudelft.nl:/scratch/<netid>/dbtest/A350_production*_results.csv delftblue_test\\
+    abaqus python code/3_results_processing/compare_delftblue_test.py
 
 Standard library only.
 """
