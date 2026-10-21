@@ -216,3 +216,40 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+# ---------------------------------------------------------------------------
+# Thesis repository
+# ---------------------------------------------------------------------------
+# Archives (for example repo_update_*.zip)
+*.zip
+# Abaqus output and scratch files (tens of gigabytes; rerun the model to regenerate)
+*.odb
+*.odb_f
+*.lck
+*.cae
+*.jnl
+*.rpy
+*.rpy.*
+*.rec
+*.dat
+*.msg
+*.sta
+*.prt
+*.com
+*.sim
+*.mdl
+*.stt
+*.res
+*.023
+*.ipm
+*.abq
+*.pac
+*.sel
+*.inp
+abaqus.rpy*
+abaqus_acis.log
+# Folders written on demand by the supporting scripts
+design_drawings/
+earlier_draft_figures/
+# macOS and Windows
+.DS_Store
+Thumbs.db
