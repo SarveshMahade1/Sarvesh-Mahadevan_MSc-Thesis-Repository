@@ -1,0 +1,47 @@
+{
+ "E190": {
+  "label": "E190",
+  "m_lh2_kg": 5103.7,
+  "V_required_m3": 80.096,
+  "R_derived_m": 1.3015,
+  "L_derived_m": 13.9667,
+  "R_model_m": 1.3015,
+  "L_model_m": 13.9675,
+  "h_cap_m": 0.8134,
+  "L_total_m": 15.594,
+  "V_model_m3": 80.1,
+  "A_m2": 130.44,
+  "slenderness": 5.366,
+  "geometry_source": "design_basis.json"
+ },
+ "A320": {
+  "label": "A320",
+  "m_lh2_kg": 6677.9,
+  "V_required_m3": 104.801,
+  "R_derived_m": 1.708,
+  "L_derived_m": 10.0117,
+  "R_model_m": 1.708,
+  "L_model_m": 10.012,
+  "h_cap_m": 1.0675,
+  "L_total_m": 12.147,
+  "V_model_m3": 104.803,
+  "A_m2": 135.38,
+  "slenderness": 2.931,
+  "geometry_source": "design_basis.json"
+ },
+ "A350": {
+  "label": "A350-900",
+  "m_lh2_kg": 47824.6,
+  "V_required_m3": 750.543,
+  "R_derived_m": 2.5771,
+  "L_derived_m": 33.8243,
+  "R_model_m": 2.5771,
+  "L_model_m": 33.824,
+  "h_cap_m": 1.6107,
+  "L_total_m": 37.045,
+  "V_model_m3": 750.537,
+  "A_m2": 611.28,
+  "slenderness": 6.562,
+  "geometry_source": "design_basis.json"
+ }
+}

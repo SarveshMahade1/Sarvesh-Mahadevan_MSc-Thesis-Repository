@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-TANK DESIGN DETAIL DRAWINGS, BLACK AND WHITE (28 Sep 2026)
-Drafts for Sarvesh to redraw. E190 values, from results/processed/final_numbers.json,
+TANK DESIGN DETAIL DRAWINGS, BLACK AND WHITE
+Supporting draft drawings, not figures of the final report. E190 values, from results/processed/final_numbers.json,
 results/processed/insulation.json and the jacket trade (Chapter 3).
 
     12_tank_general_arrangement   side elevation of the E190 tank: inner vessel,

@@ -1,0 +1,117 @@
+{
+  "_about": "Single source of every design input of the workflow. All plain-Python scripts and the Abaqus model read this file through code/design_basis.py, so a change here propagates everywhere. The values are those of the thesis; edit them, or point the environment variable LH2_DESIGN_BASIS at a copy, to run a new study. Units are SI unless the key says otherwise.",
+
+  "mission": {
+    "_doc": "Energy equivalence and tank sizing rule (thesis Section 3.1). The hydrogen mass carries the energy of the kerosene it replaces; the radius is a fixed fraction of the fuselage diameter; the barrel length follows from the volume at the mission fill level.",
+    "lhv_jet_a_MJ_per_kg": 43.0,
+    "lhv_lh2_MJ_per_kg": 120.0,
+    "rho_lh2_kg_m3": 70.8,
+    "mission_fill_level": 0.90,
+    "tank_to_fuselage_diameter_ratio": 0.8648,
+    "cap_aspect_ratio_a_over_b": 1.6
+  },
+
+  "aircraft": {
+    "_doc": "One record per tank. Mission inputs: jet_a_mass_kg and fuselage_diameter_m. Model geometry: R_mid_m and L_barrel_m; set both to null and they are derived from the mission inputs by tank_geometry_from_mission.py and design_basis.py (rounded to 0.1 mm). The thesis records keep the geometry exactly as analysed. Q_budget_W: null derives it from the heat_budget rule below. t_wall_initial_m is only the starting value of the FE sizing loop; the sized wall is read from results/sized_walls.csv.",
+    "E190": {
+      "label": "E190",
+      "jet_a_mass_kg": 14243,
+      "fuselage_diameter_m": 3.01,
+      "fuselage_length_m": 36.24,
+      "R_mid_m": 1.3015,
+      "L_barrel_m": 13.9675,
+      "Q_budget_W": 702.6,
+      "t_wall_initial_m": 0.002747,
+      "note": "Kerosene mass derived in an earlier phase of the project from a tank volume of 80.10 m3, hence the barrel length was fixed from that volume."
+    },
+    "A320": {
+      "label": "A320",
+      "jet_a_mass_kg": 18636,
+      "fuselage_diameter_m": 3.95,
+      "fuselage_length_m": 37.57,
+      "R_mid_m": 1.7080,
+      "L_barrel_m": 10.0120,
+      "Q_budget_W": 919.3,
+      "t_wall_initial_m": 0.002694,
+      "note": "23 740 L usable capacity at 0.785 kg/L."
+    },
+    "A350": {
+      "label": "A350-900",
+      "jet_a_mass_kg": 133464,
+      "fuselage_diameter_m": 5.96,
+      "fuselage_length_m": 66.8,
+      "R_mid_m": 2.5771,
+      "L_barrel_m": 33.8240,
+      "Q_budget_W": 6583.2,
+      "t_wall_initial_m": 0.008884,
+      "note": "166 000 L at 0.804 kg/L (Airbus A350 Family Facts and Figures, April 2025)."
+    }
+  },
+
+  "material": {
+    "_doc": "Inner vessel, aluminium 2219-T87, room-temperature MIL-HDBK-5J values (thesis Table 3.3).",
+    "name": "Al 2219-T87",
+    "E_Pa": 73.1e9,
+    "nu": 0.33,
+    "rho_kg_m3": 2850.0,
+    "alpha_per_K": 22.3e-6,
+    "k_W_per_mK": 116.0,
+    "cp_J_per_kgK": 864.0,
+    "Fty_Pa": 393e6
+  },
+
+  "criteria": {
+    "_doc": "Reserve factors RF = allowable / applied with a project design margin in both allowables. The margin is not the CS-25 factor of safety (thesis Section 3.6). Buckling allowable: NASA SP-8007 knockdown, pressure stabilisation not credited.",
+    "yield_margin": 1.5,
+    "buckling_margin": 1.5,
+    "min_gauge_m": 0.0
+  },
+
+  "pressures": {
+    "_doc": "Absolute operating pressures and the two design pressure differences. Strength at p_design_gauge_Pa (3.6 % above venting for relief-valve tolerance); stability at p_fill_abs_Pa minus p_ambient_Pa, the pressure difference after a loss of vacuum at sea level.",
+    "p_fill_abs_Pa": 120000.0,
+    "p_vent_abs_Pa": 144800.0,
+    "p_ambient_Pa": 101325.0,
+    "p_design_gauge_Pa": 150000.0
+  },
+
+  "thermal": {
+    "_doc": "Thermal boundary conditions (Bagarello et al. Sec. 3.1) and the stress-free reference temperature (cold operating state).",
+    "T_liquid_K": 20.3,
+    "T_ullage_K": 20.3,
+    "T_reference_K": 20.3,
+    "T_ambient_K": 293.0,
+    "h_wetted_W_per_m2K": 1000.0,
+    "h_dry_W_per_m2K": 1.46,
+    "k_mli_effective_W_per_mK": 0.0003
+  },
+
+  "heat_budget": {
+    "_doc": "Rule used when an aircraft record has Q_budget_W = null: Q = boiloff_fraction_per_h x (V x rho_lh2) x h_fg / 3600. It equals a no-vent hold of 14.68 h between p_fill_abs_Pa and p_vent_abs_Pa for a tank sealed at hold_fill_level (boiloff_requirement_derivation.py derives this from the parahydrogen equation of state).",
+    "boiloff_fraction_per_h": 0.001,
+    "h_fg_J_per_kg": 446000.0,
+    "hold_fill_level": 0.97,
+    "hold_time_h": 14.68
+  },
+
+  "load_cases": {
+    "_doc": "Load factors n = (nx forward, ny lateral, nz vertical) in g. The keys are the codes used in the results file names; label is the name used in the thesis. Add a case by adding a record.",
+    "Baseline":      {"label": "Baseline condition",  "nx": 0.0, "ny": 0.0, "nz": 1.0, "basis": "1 g, ground or level flight"},
+    "LC1_Maneuver":  {"label": "Symmetric manoeuvre", "nx": 0.0, "ny": 0.0, "nz": 2.5, "basis": "CS 25.337, limit"},
+    "LC3_Combined":  {"label": "Combined manoeuvre",  "nx": 1.5, "ny": 0.0, "nz": 2.5, "basis": "assumed, not CS-25"},
+    "LC7_Emergency": {"label": "Emergency landing",   "nx": 9.0, "ny": 3.0, "nz": 6.0, "basis": "CS 25.561 factors combined, ultimate"}
+  },
+
+  "fill_levels": [0.1, 0.3, 0.5, 0.75, 0.9],
+
+  "analysis": {
+    "_doc": "Case used to size the wall and for the mesh study, and the extraction and mesh rules (thesis Sections 4.4 and 4.7).",
+    "governing_case": "LC7_Emergency",
+    "governing_fill": 0.9,
+    "mesh_fraction_of_sqrt_Rt": 0.5,
+    "convergence_fractions": [1.0, 0.5, 0.25],
+    "far_field_exclusion_m": 0.5,
+    "hydrostatic_bins": 64,
+    "free_surface_sample_points": 200000
+  }
+}

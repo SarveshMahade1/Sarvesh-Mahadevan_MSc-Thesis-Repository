@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-INDEPENDENT HAND CALCULATIONS AGAINST THE FINITE ELEMENT RESULTS (28 Sep 2026)
-=============================================================================
+INDEPENDENT HAND CALCULATIONS AGAINST THE FINITE ELEMENT RESULTS
+================================================================
 
 Closed-form physics for every check quoted in the report, evaluated at the
 sized walls and set beside the finite element value from
@@ -23,18 +23,20 @@ import os as _os
 import sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
 import repo_paths as RP  # noqa: E402  (folder layout of the repository)
+import design_basis as DB  # noqa: E402  (single source of the design inputs)
 D = json.load(open(os.path.join(RP.PROCESSED, 'final_numbers.json')))
-AC = ['E190', 'A320', 'A350']
-G = 9.81
-P = 1.5e5
-PMIN = 0.18675e5
-E, NU, ALPHA, K_AL = 73.1e9, 0.33, 22.3e-6, 116.0
-RHO_LH2, H_DRY = 70.8, 1.46
-A_OVER_B = 1.6
-LOADS = {'Baseline': (0.0, 0.0, 1.0), 'LC7_Emergency': (9.0, 3.0, 6.0)}
-P_VAC_MIN = 1.2e5        # Pa abs, minimum operating pressure against the vacuum
-P_RELIEF_ABS = 1.448e5   # Pa abs, relief setting against the vacuum
-T_REF = 20.3             # K
+AC = [ac for ac in DB.AIRCRAFT if ac in D]          # aircraft with processed results
+G = DB.G
+P = DB.P_DESIGN
+PMIN = DB.P_STABILITY
+E, NU, ALPHA, K_AL = DB.MAT['E_Pa'], DB.MAT['nu'], DB.MAT['alpha_per_K'], DB.MAT['k_W_per_mK']
+RHO_LH2, H_DRY = DB.MISSION['rho_lh2_kg_m3'], DB.TH['h_dry_W_per_m2K']
+A_OVER_B = DB.MISSION['cap_aspect_ratio_a_over_b']
+GOV = DB.ANALYSIS['governing_case']
+LOADS = {'Baseline': DB.LOAD_CASES['Baseline'], 'LC7_Emergency': DB.LOAD_CASES[GOV]}
+P_VAC_MIN = DB.PRESS['p_fill_abs_Pa']        # Pa abs, minimum operating pressure against the vacuum
+P_RELIEF_ABS = DB.PRESS['p_vent_abs_Pa']     # Pa abs, relief setting against the vacuum
+T_REF = DB.TH['T_reference_K']               # K
 
 
 # NIST cryogenic material properties, Al 6061-T6 (UNS A96061), curve fits from
@@ -193,7 +195,7 @@ for ac in AC:
     # 10. Resolution of the binned temperature transfer (24 bins)
     c['binning'] = {'bin_width_K': (prod['Baseline|0.10']['T_max'] - prod['Baseline|0.10']['T_min']) / 24.0}
 
-    # 11. Pressure differential with the insulating vacuum INTACT (added 28 Sep).
+    # 11. Pressure differential with the insulating vacuum INTACT .
     #     The inner wall faces the evacuated gap, so with the vacuum intact the
     #     differential is the absolute tank pressure, at least 1.2 bar. The
     #     0.187 bar stability case is the differential after a LOSS OF VACUUM
@@ -211,7 +213,7 @@ for ac in AC:
                           'axial_min_loss_of_vacuum_MPa': ax_lov,
                           'axial_min_vacuum_intact_MPa': ax_lov + s_add}
 
-    # 12. Cryogenic material properties (added 28 Sep). The model uses room-
+    # 12. Cryogenic material properties. The model uses room-
     #     temperature alpha and kappa, as the benchmark study does. NIST
     #     cryogenic data for Al 6061-T6 (no 2219 entry) are used as a surrogate
     #     to size the consequence. Thermal strain is the integral of alpha from
@@ -227,7 +229,7 @@ for ac in AC:
         'E_6061_293K_GPa': nist_6061_E(293.0), 'E_6061_20K_GPa': nist_6061_E(T_REF),
         'F_thermal_cryo_kN': F_th / ratio, 'F_mid_est_cryo_kN': F_mech - F_th / ratio}
 
-    # 13. Bound on the thermal stress, and the margins it can move (added 28 Sep).
+    # 13. Bound on the thermal stress, and the margins it can move.
     #     No thermal stress in the far field can exceed that of the thermal
     #     strain fully restrained in both directions, E alpha dT / (1 - nu),
     #     with the room-temperature alpha of the model and the largest dT.

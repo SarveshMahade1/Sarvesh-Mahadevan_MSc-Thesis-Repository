@@ -21,6 +21,11 @@ applied together) at five fill levels, at both pressures:
 
 Every number in the thesis can be traced to a file in this repository and regenerated from it.
 
+**To use the analysis in your own work**, start with [`docs/analysis_guide.md`](docs/analysis_guide.md):
+it describes every step of the method (physics, equations, assumptions, inputs and outputs), where
+each step is implemented, and how to add to it or rebuild it in another code. To change the inputs,
+see "Extending the workflow" below.
+
 ## Load-case names
 
 The thesis names the four load cases in words. The scripts and result files use short codes,
@@ -63,6 +68,9 @@ code/
   2_requirements_and_sizing/   heat leak budget, insulation, outer jacket, closed-form walls
   3_results_processing/        merges the results, closed-form checks, appendix tables
   4_figures_and_drawings/      every graph, contour panel and drawing of the thesis
+  design_basis.json            every design input of the workflow, in one place (see "Extending the workflow")
+  design_basis.py              reads design_basis.json and derives geometry, heat budget and allowables
+  reproduce_all.py             runs the whole plain-Python chain in order
   repo_paths.py                the folder layout, in one place
 
 results/
@@ -73,13 +81,15 @@ results/
   wall_sizing_iterations/      every iteration of the FE wall sizing, per aircraft
   benchmark_bagarello/         the reference tank of Bagarello et al. run through the method
   solver_check_delftblue/      one case solved on the DelftBlue cluster (Abaqus 2024)
-  processed/                   final_numbers.json, hand_calcs.json, insulation.json,
+  processed/                   tank_geometry.json, heat_budget.json, insulation.json,
+                               final_numbers.json, hand_calcs.json, review_checks.json,
                                production_matrix_sized_walls.csv
 
 abaqus_contour_captures_report/  the Abaqus captures (legend and tank in one image) from which
                                make_report_contours.py builds every contour and mesh figure of the thesis
 abaqus_contour_captures/       earlier draft only: a partial set of 15 side-legend captures, kept for the record
-docs/                          full_results_matrices.md (all 120 cases with reserve factors) and
+docs/                          analysis_guide.md (the method step by step, and how to extend it),
+                               full_results_matrices.md (all 120 cases with reserve factors) and
                                detailed_calculations.md (the checks behind the final report)
 thesis_figures/                the 29 figures of the final report (PDF as used in the thesis, PNG preview)
 thesis_appendix/               appendix_calculation_traceability.tex, the condensed appendix as printed in
@@ -104,10 +114,18 @@ them.
 | `E190_MASTER_thermo_structural.py` | The digitalized workflow. Despite the name it serves all three aircraft. Geometry, mesh (seed 0.5 sqrt(Rt)), free surface normal to the load factor, steady-state heat transfer, banded temperature transfer, static solution with pressure, hydrostatic head and inertia, three ring supports, far-field extraction, verification gates, FE wall sizing. |
 | `ABAQUS_capture_all.py` | Captures the contour images from the output databases. |
 | `run_final_delftblue.sh` | SLURM job script used on the DelftBlue cluster. |
+| `DEVELOPMENT_NOTES.md` | How the model reached its final form: the modelling errors found and corrected on the way, so they are not reintroduced. |
 
-Run the model from an empty working folder; the .odb and results files are written there. Copy
-`results/sized_walls.csv` into that folder first, so that every run uses the sized walls. The model
-is controlled by environment variables, so nothing in the file needs editing:
+The header of the master script gives its section map, conventions (axes, load factors, units) and
+the places where a new load, boundary condition, result or criterion is added.
+
+Run the model from an empty working folder; the .odb and results files are written there. Start it
+with `abaqus cae noGUI=...` so that it finds `code/design_basis.json` (from the script path, the
+command line, `<working folder>/code` or the folder of `LH2_DESIGN_BASIS`); started through
+File > Run Script from a folder outside the repository it cannot locate the design basis, says so,
+and falls back to the thesis values written in the script. The sized walls are read from `results/sized_walls.csv` (or from a copy in the working folder).
+The model is controlled by the design basis and by environment variables, so nothing in the script
+needs editing:
 
 | Variable | Values |
 |---|---|
@@ -117,6 +135,12 @@ is controlled by environment variables, so nothing in the file needs editing:
 | `E190_ONLY_LC`, `E190_ONLY_FILL` | run part of the matrix, for example `LC7_Emergency` and `0.9` |
 | `E190_T_WALL`, `E190_P_GAUGE` | override the wall [mm] or the pressure [bar] |
 | `E190_BENCHMARK=1` | run the Bagarello et al. reference tank instead |
+| `E190_DRY_RUN=1` | resolve and print every input with first-order checks (pR/t, SP-8007 allowable, q/h, decay length, mesh size, number of analyses), then stop. Runs in plain Python 3 as well, without a licence |
+| `LH2_DESIGN_BASIS` | path of an alternative design basis file, for a study that leaves the thesis file untouched |
+| `E190_WORKDIR` | working folder for the .odb and results files (used on the cluster) |
+| `E190_ALPHA`, `E190_KAPPA` | override the expansion coefficient [1/K] or the conductivity [W/m·K], for the cryogenic-property check |
+| `E190_MIN_GAUGE_MM` | impose a minimum manufacturable wall in the sizing, for example `1.59` (ASME VIII-1, UG-16(b)) |
+| `E190_CONV_FRACTIONS` | mesh levels of the convergence study as fractions of sqrt(Rt), for example `1,0.5,0.25` |
 
 Example, one aircraft, production and stability at the sized wall (Windows PowerShell):
 
@@ -133,7 +157,8 @@ abaqus cae noGUI=<repository>\code\1_abaqus_model\E190_MASTER_thermo_structural.
 
 | Script | Purpose |
 |---|---|
-| `boiloff_requirement_derivation.py` | Heat leak budget from the no-vent hold (constant-volume energy balance). |
+| `tank_geometry_from_mission.py` | First link of the workflow: kerosene load, energy equivalence, volume at the mission fill, radius from the fuselage, barrel length (thesis Section 3.1). Writes `results/processed/tank_geometry.json`. |
+| `boiloff_requirement_derivation.py` | Heat leak budget from the no-vent hold (constant-volume energy balance, parahydrogen equation of state). Writes `results/processed/heat_budget.json`. |
 | `boiloff_holdtime_sensitivity.py` | Hold time swept from 2 h to 36 h, and its effect on the insulation (uses CoolProp). |
 | `insulation_sizing.py` | Foam, vacuum and vacuum-with-MLI options against the budget. |
 | `outer_jacket_closed_form.py` | External-pressure collapse of the outer jacket, plain and ring-stiffened. |
@@ -167,32 +192,103 @@ abaqus cae noGUI=<repository>\code\1_abaqus_model\E190_MASTER_thermo_structural.
 
 ## Reproducing the numbers and figures
 
-Install the plain-Python dependencies once, then run from anywhere:
+Install the plain-Python dependencies once, then run the whole chain with one command, from anywhere:
 
 ```
 pip install -r requirements.txt
-python code/3_results_processing/final_numbers.py
-python code/3_results_processing/hand_calcs.py
-python code/2_requirements_and_sizing/insulation_sizing.py
-python code/3_results_processing/make_appendix_traceability.py
-python code/3_results_processing/review_checks.py
-python code/3_results_processing/make_review_docs.py
-python code/4_figures_and_drawings/plot_final_figures.py
-python code/4_figures_and_drawings/make_report_contours.py abaqus_contour_captures_report thesis_figures
-python code/4_figures_and_drawings/draw_workflow.py thesis_figures
-python code/4_figures_and_drawings/draw_report_diagrams.py
-python code/4_figures_and_drawings/draw_pressure_vessel_cuts.py
-python code/2_requirements_and_sizing/boiloff_holdtime_sensitivity.py
+python code/reproduce_all.py               # everything, about 3 minutes
+python code/reproduce_all.py --no-figures  # numbers, documents and appendix tables only
 ```
 
-Run from the repository root on the files in this repository (October 2026), these reproduce
-`results/processed/`, `docs/` and `thesis_appendix/appendix_calculation_traceability_full.tex`
-(identical apart from the last floating-point digit of one property), and regenerate all 29 figures
-of `thesis_figures/` identically. They also write a few supporting graphs that are not in the thesis
-(for example `fig5_convergence`, `fig5_heatflux_three`, `fig3_resistance_network`).
-`make_report_contours.py` calls `tesseract` to read the Abaqus legend levels, so Tesseract OCR must be
-installed and on the path. The model scripts run in the Python interpreter bundled with Abaqus and do
-not use `requirements.txt`.
+It runs, in order: tank geometry from the mission, heat budget, insulation, merge of the finite
+element results, closed-form and review checks, outer jacket, closed-form walls, benchmark check,
+documents and appendix tables, and the thesis figures. On the files of this repository the outputs
+are identical to the committed ones (`git status` shows no change, apart from the last floating-point
+digit of one material property on some platforms), including all 29 figures of `thesis_figures/`.
+The figure scripts also write a few supporting graphs that are not in the thesis (for example
+`fig5_convergence`, `fig5_heatflux_three`, `fig3_resistance_network`). `make_report_contours.py` calls
+`tesseract` to read the Abaqus legend levels, so Tesseract OCR must be installed and on the path.
+Tested with Python 3.13, numpy 2.5, matplotlib 3.11, Pillow 12.3, CoolProp 8.0 and Tesseract 5.3. The
+model scripts run in the Python interpreter bundled with Abaqus (2024 and 2025) and do not use
+`requirements.txt`.
+
+## Extending the workflow
+
+Every design input lives in `code/design_basis.json`: the mission rule, the aircraft records, the
+material, the design margins, the pressures, the thermal boundary conditions, the heat budget rule,
+the load cases, the fill levels, and the mesh and extraction rules. The Abaqus model and the
+plain-Python scripts all read it through `code/design_basis.py`, so a change made there reaches every
+step. Each section of the file carries a `_doc` entry that explains its keys and units. To run a study
+without touching the thesis inputs, copy the file and set `LH2_DESIGN_BASIS` to the copy.
+
+Before spending licence time, check any change with a dry run (plain Python 3 is enough):
+
+```
+E190_DRY_RUN=1 E190_AIRCRAFT=E190 python code/1_abaqus_model/E190_MASTER_thermo_structural.py
+```
+
+**Add an aircraft.** Add a record under `aircraft` with `label`, `jet_a_mass_kg`,
+`fuselage_diameter_m` and a starting wall `t_wall_initial_m`, and set `R_mid_m`, `L_barrel_m` and
+`Q_budget_W` to `null`. The geometry then follows from the mission rule and the heat budget from the
+`heat_budget` rule. Run `tank_geometry_from_mission.py` and `boiloff_requirement_derivation.py` to see
+the derived values, check them with a dry run (`E190_AIRCRAFT=<key>`), then run the model with
+`E190_RUN_MODE=FINAL`, which sizes the wall, records it in `sized_walls.csv` in the working folder and
+runs the production, stability and convergence stages. Add that row to `results/sized_walls.csv`, copy
+the results files into the folders of `results/` (listed under "What is where") and run
+`python code/reproduce_all.py --no-figures`; `final_numbers.py` and `hand_calcs.py` pick up every
+aircraft that has a sized wall. The thesis figure, appendix and
+review-document scripts reproduce the thesis for its three tanks and are left unchanged.
+
+**Change the material.** Edit `material` (and `criteria` for the margins). The yield and buckling
+allowables, the thermal model and the sizing loop all follow. For temperature-dependent properties,
+the cryogenic check of `review_checks.py` and the overrides `E190_ALPHA` and `E190_KAPPA` show how the
+expansion coefficient and conductivity enter.
+
+**Add or change a load case.** Add a record under `load_cases` with `nx` (forward), `ny` (lateral) and
+`nz` (vertical) in g. The free surface, the hydrostatic pressure and the shell inertia follow from the
+vector, and the case runs at every fill level. `analysis.governing_case` and
+`analysis.governing_fill` select the case that sizes the wall and is used for the mesh study.
+
+**Change the fill levels, pressures, hold time or mesh rule.** Edit `fill_levels`, `pressures`,
+`heat_budget` (set an aircraft's `Q_budget_W` to `null` to apply the rule) or `analysis`. The
+operating pressures enter both the strength and the stability assessment; the stability pressure
+difference is `p_fill_abs_Pa` minus `p_ambient_Pa`.
+
+**What the workflow does not cover yet**, and where to extend it: a transient (sloshing) liquid, a
+discretised insulation and outer jacket, flexible supports, temperature-dependent properties and a
+nonlinear buckling analysis. These are the further work of thesis Chapter 7; the model is built so
+that each enters as an additional load, boundary condition or stage without changing the chain.
+
+## Results files: columns
+
+Each results file of `results/production_1p5bar/`, `stability_0p187bar/`, `mesh_convergence/` and
+`wall_sizing_iterations/` has one row per analysis (the sizing files add a `stage` column). Stresses
+are far-field values, outside `far_field_exclusion_m` of every ring, unless stated otherwise.
+
+| Column | Meaning | Unit |
+|---|---|---|
+| `load_case`, `fill` | load case code (see "Load-case names") and fill level | -, - |
+| `seed_mm`, `n_el`, `n_nd` | element size, number of elements and nodes | mm, -, - |
+| `T_min`, `T_max`, `dT` | minimum and maximum wall temperature, and their difference | K |
+| `mises_MPa` | maximum far-field von Mises stress | MPa |
+| `mises_singular_MPa` | maximum von Mises stress including the ring zones (singular, not a design value) | MPa |
+| `fos` | yield reserve factor, (F_ty / margin) / `mises_MPa` | - |
+| `u_max_mm` | maximum displacement magnitude | mm |
+| `sumRF_N` | magnitude of the sum of the ring reactions | N |
+| `t_wall_mm`, `p_gauge_bar` | wall thickness and internal pressure difference of the analysis | mm, bar |
+| `axial_mem_min_MPa` | minimum (most compressive) axial membrane stress in the far-field barrel | MPa |
+| `sigma_cr_MPa`, `buckling_fos` | SP-8007 buckling stress and buckling reserve factor | MPa, - |
+| `orientation_ok` | check that the mean hoop stress exceeds the mean axial stress (correct loaded face and axes) | true/false |
+| `balance_ratio` | sum of ring reactions divided by the applied load (equilibrium check) | - |
+| `hfl_max_Wm2` | maximum in-plane conductive heat flux | W/m² |
+| `mean_S11_mem_MPa`, `mean_S22_mem_MPa` | mean axial (S11) and hoop (S22) membrane stress of the far-field barrel | MPa |
+| `ovality_mm`, `ur_keel_mm`, `ur_flank_mm` | out-of-roundness at mid-bay, radial displacement at the keel and the flank | mm |
+| `RF_aft_kN`, `RF_mid_kN`, `RF_fwd_kN` | reaction at each ring | kN |
+| `probe_S11_sneg_MPa` ... `probe_S22_spos_MPa` | axial and hoop stress of the crown probe at x = L/4 on both shell surfaces | MPa |
+| `cap_S11_mem_min_MPa`, `cap_S22_mem_min_MPa` | minimum meridional and hoop membrane stress in the end caps | MPa |
+
+`sized_walls.csv` holds, per aircraft, the sized wall, the governing requirement, the two reserve
+factors of the governing case and the two pressures.
 
 ## Figure index
 

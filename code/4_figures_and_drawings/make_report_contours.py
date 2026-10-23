@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-CONTOUR FIGURES FOR THE REVISED REPORT (October 2026)
+CONTOUR FIGURES OF THE THESIS REPORT
 
-Rebuilds the contour figures of the report from the single Abaqus captures
-(ABAQUS_capture_all.py output, <AC>_<case>_f<fill>_<field>_front.png) so that
-they meet the review comments:
+Builds the contour figures of the report from the single Abaqus captures
+(ABAQUS_capture_all.py output, <AC>_<case>_f<fill>_<field>_front.png), with:
 
   - no overhead titles: each frame carries only a panel label (a), (b), ...,
     and everything else is explained in the figure caption of the report;
@@ -17,7 +16,9 @@ they meet the review comments:
 Inputs : a folder of captures, CAPS/<AC>/<AC>_<case>_f<ff>_<field>_front.png
 Outputs: <out>.pdf and <out>.png in the figure folder.
 
-    python make_report_contours.py <captures folder> <figure folder>
+    python code/4_figures_and_drawings/make_report_contours.py abaqus_contour_captures_report thesis_figures
+
+Needs the tesseract OCR program for the legend levels.
 """
 import os
 import re

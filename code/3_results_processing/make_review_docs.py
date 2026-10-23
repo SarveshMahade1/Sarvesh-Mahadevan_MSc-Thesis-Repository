@@ -1,21 +1,22 @@
 # -*- coding: utf-8 -*-
 """
-DETAILED CALCULATIONS AND FULL MATRICES FOR THE REPOSITORY (October 2026)
+DETAILED CALCULATIONS AND FULL MATRICES FOR THE REPOSITORY
 
-After the supervisors' review the report was shortened, and the detail that
-no longer fits in it is kept here instead. This script writes two Markdown
-documents from the results files, so that every number in them is traceable
-to a script that was run:
+The detail that does not fit in the thesis report is kept in two Markdown
+documents, written by this script from the results files, so that every
+number in them is traceable to a script that was run:
 
   docs/full_results_matrices.md   all 120 production and stability cases,
                                   with reserve factors in the convention of
                                   the report (RF = allowable / applied,
                                   margin 1.5 inside both allowables)
   docs/detailed_calculations.md   the closed-form and review checks behind
-                                  the revised report (review_checks.json,
+                                  the report (review_checks.json,
                                   hand_calcs.json, insulation.json)
 
-Run review_checks.py first.
+RUN      python code/3_results_processing/make_review_docs.py
+         (after final_numbers.py, hand_calcs.py, insulation_sizing.py and
+         review_checks.py)
 """
 import json
 import os

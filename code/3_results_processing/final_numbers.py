@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-FINAL NUMBERS FOR THE THESIS REPORT (28 Sep 2026)
-=================================================
+FINAL NUMBERS FOR THE THESIS REPORT
+===================================
 
 Every number quoted in the report text, tables and graphs is taken from the
 file this script writes, results/processed/final_numbers.json, and from the
@@ -15,8 +15,9 @@ Inputs (all written by E190_MASTER_thermo_structural.py):
     <AC>_convergence_{pdesign,pmin}_results.csv      3 mesh levels each
 
 Only rows at the recorded sized wall and at the stage pressure are accepted.
-Geometry and the free-surface depth are recomputed here from the same
-AIRCRAFT_DATA and the same formulas as the MASTER script.
+Geometry, material, load cases and fill levels come from code/design_basis.json
+(through design_basis.py), the same inputs the MASTER script reads. Aircraft
+of the design basis without a row in sized_walls.csv are skipped.
 
 Run with any Python 3 (standard library only):
     python code/3_results_processing/final_numbers.py
@@ -31,27 +32,32 @@ import os as _os
 import sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
 import repo_paths as RP  # noqa: E402  (folder layout of the repository)
+import design_basis as DB  # noqa: E402  (single source of the design inputs)
 OUT = RP.PROCESSED
 if not os.path.isdir(OUT):
     os.makedirs(OUT)
 
-AC = ['E190', 'A320', 'A350']
-LCS = ['Baseline', 'LC1_Maneuver', 'LC3_Combined', 'LC7_Emergency']
-FILLS = [0.1, 0.3, 0.5, 0.75, 0.9]
-P_DES, P_MIN = 1.5, 0.18675
+# ---- inputs from code/design_basis.json, as read by the MASTER script ----
+_SIZED = set()
+if os.path.exists(RP.SIZED_WALLS):
+    _SIZED = set(r['aircraft'] for r in csv.DictReader(open(RP.SIZED_WALLS)))
+AC = [ac for ac in DB.AIRCRAFT if ac in _SIZED]
+for _ac in DB.AIRCRAFT:
+    if _ac not in _SIZED:
+        print('skipped %s: no sized wall in %s yet' % (_ac, RP.SIZED_WALLS))
+LCS = list(DB.LOAD_CASE_ORDER)
+FILLS = list(DB.FILLS)
+P_DES, P_MIN = DB.P_DESIGN / 1e5, DB.P_STABILITY / 1e5
 
-# ---- identical to the MASTER script -------------------------------------
-GEO = {'E190': dict(R=1.3015, L=13.9675, Q=702.6),
-       'A320': dict(R=1.7080, L=10.0120, Q=919.3),
-       'A350': dict(R=2.5771, L=33.8240, Q=6583.2)}
-CAP_ASPECT = 1.6
-E, NU, RHO_AL = 73.1e9, 0.33, 2850.0
-FTY, SF = 393e6, 1.5
-RHO_LH2, G = 70.8, 9.81
-LOADS = {'Baseline': (0.0, 0.0, 1.0), 'LC1_Maneuver': (0.0, 0.0, 2.5),
-         'LC3_Combined': (1.5, 0.0, 2.5), 'LC7_Emergency': (9.0, 3.0, 6.0)}
-H_WET, H_DRY, T_LH2 = 1000.0, 1.46, 20.3
-K_AL = 116.0
+GEO = dict((ac, dict(R=DB.geometry(ac)['R'], L=DB.geometry(ac)['L'], Q=DB.heat_budget(ac)))
+           for ac in DB.AIRCRAFT)
+CAP_ASPECT = DB.MISSION['cap_aspect_ratio_a_over_b']
+E, NU, RHO_AL = DB.MAT['E_Pa'], DB.MAT['nu'], DB.MAT['rho_kg_m3']
+FTY, SF = DB.MAT['Fty_Pa'], DB.CRIT['yield_margin']
+RHO_LH2, G = DB.MISSION['rho_lh2_kg_m3'], DB.G
+LOADS = dict(DB.LOAD_CASES)
+H_WET, H_DRY, T_LH2 = DB.TH['h_wetted_W_per_m2K'], DB.TH['h_dry_W_per_m2K'], DB.TH['T_liquid_K']
+K_AL = DB.MAT['k_W_per_mK']
 
 
 def sigma_cr(R, t):

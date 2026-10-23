@@ -1,50 +1,47 @@
 # -*- coding: utf-8 -*-
 """
 ================================================================================
-AUTOMATED CONTOUR CAPTURE FOR EVERY PRODUCTION ODB
-TU Delft MSc thesis - Sarvesh Mahadevan
+AUTOMATED CONTOUR CAPTURE FROM THE OUTPUT DATABASES
+ABAQUS_capture_all.py, TU Delft MSc thesis, Sarvesh Mahadevan
 
-Opens every production ODB in turn and writes contour images at three views,
-with locked contour limits, white background and no title block, so that every
-frame in a set is directly comparable with every other.
+Opens the output databases of the production matrix in turn and writes
+contour images with locked contour limits, a fixed camera per view, a white
+background and no title block, so that every frame of a set can be compared
+directly with every other. Done by hand across 120 databases, limits and
+camera drift and a colour stops denoting the same value in every frame.
 
-RUN IT WITH (from the thesis root, the folder containing E190\\ A320\\ A350\\):
+HOW TO RUN (from the working folder that holds the .odb files and the
+<AC>_production*_results.csv files):
 
-    abaqus cae noGUI=code/1_abaqus_model/ABAQUS_capture_all.py
+    abaqus cae noGUI=<repository>/code/1_abaqus_model/ABAQUS_capture_all.py
 
-Do NOT use "abaqus python" - that has no graphics context and cannot print
-images. It must be "abaqus cae noGUI=..." (or "abaqus viewer noGUI=...").
+"abaqus python" cannot be used: it has no graphics context and cannot print
+images. Set QUICK_TEST = True first to render a single database and check
+the camera, the limits and the crop.
 
---------------------------------------------------------------------------------
-WHY THIS EXISTS RATHER THAN CLICKING
---------------------------------------------------------------------------------
-Every frame in a comparison set must share a contour scale and a camera. Done by
-hand across 120 ODBs and several sittings, the limits drift and the comparison
-silently stops meaning anything: a colour in one frame no longer denotes the same
-stress as that colour in the next. Here the limits and the viewpoint are the same
-lines of code for every frame, so consistency is guaranteed rather than hoped for.
+INPUTS
+    HT_<tag>.odb, ST_<tag>.odb        from E190_MASTER_thermo_structural.py
+    <AC>_production*_results.csv      far-field results, for the contour limits
+    sized_walls.csv (or AIRCRAFT_DATA of the master script)
+                                      expected wall: a database at any other
+                                      wall thickness is rejected and logged
 
-It also costs one licence checkout for the whole run instead of one per session.
+OUTPUTS (in OUT_ROOT)
+    <AC>/<AC>_<LOADCASE>_f<NN>_<field>_<view>.png
+        fields  nt11, hfl (heat transfer database), mises (static database)
+        views   front, sect, bottom (CONTOUR_VIEWS); iso optional
+    mesh frames, zoomed frames and capture_log.txt
 
---------------------------------------------------------------------------------
-WHAT IT PRODUCES
---------------------------------------------------------------------------------
-    abaqus_captures\\<AIRCRAFT>\\<AIRCRAFT>_<LOADCASE>_f<NN>_<field>_<view>.png
+    FIGURE_SET = 'THESIS' renders only the frames used in the thesis (a few
+    minutes); 'ALL' renders the full matrix (1.5 to 2.5 h).
 
-e.g.  abaqus_captures\\E190\\E190_LC7_Emergency_f90_mises_iso.png
-
-fields : nt11, hfl   (from the HT odb)     mises  (from the ST odb)
-views  : front, iso, sect
-
-Full run = 3 aircraft x 4 load cases x 5 fills x (2 thermal + 1 structural)
-           fields x 3 views = 540 images, roughly 1.5-2.5 h unattended.
-
---------------------------------------------------------------------------------
-BEFORE THE FULL RUN
---------------------------------------------------------------------------------
-Set QUICK_TEST = True and run it once. That does a single ODB (about 9 images)
-so you can check the camera, the limits and the crop before committing hours.
-Then set it back to False.
+The contour figures of the thesis are composed from the captures kept in
+abaqus_contour_captures_report/ by
+    python code/4_figures_and_drawings/make_report_contours.py abaqus_contour_captures_report thesis_figures
+which replaces the Abaqus legend with a vector colour bar.
+Load-case codes as in the master script: Baseline (Baseline condition),
+LC1_Maneuver (symmetric manoeuvre), LC3_Combined (combined manoeuvre),
+LC7_Emergency (emergency landing).
 ================================================================================
 """
 
@@ -65,33 +62,20 @@ import glob
 import math
 
 # ==============================================================================
-#  REVISION 27 SEP 2026 - read this before running
+#  HOW THE FRAMES ARE KEPT CONSISTENT
 # ==============================================================================
-# 1. ODB SOURCE CORRECTED. The previous version read A320\ and A350\ sub-
-#    folders, which hold the 19 Sep ODBs at the OLD wall thicknesses (7.440 and
-#    15.250 mm). The corrected runs (6.382 and 9.948 mm) are in the thesis root.
-#    find_odb() now looks there, and every ODB is checked against the wall
-#    thickness in AIRCRAFT_DATA of the master script before it is used. An ODB
-#    at the wrong thickness is SKIPPED and logged, never plotted.
-# 2. CONTOUR WINDOWS FROM THE RESULTS. The thinner walls raise the stresses
-#    (A350 LC7 now reaches 87.5 MPa against an old window top of 60), so the old
-#    hand-typed windows would have saturated. The top of each window is now
-#    taken from the production CSVs at run time. See contour_windows().
-# 3. LEGEND NEVER COVERS THE TANK. For the views in SIDE_LEGEND_VIEWS each frame
-#    is rendered twice, legend on and legend off, into <OUT_ROOT>\_raw. Then
+# 1. WALL CHECK. Every database is checked against the expected wall of its
+#    aircraft (expected_thickness) before it is used; a database at another
+#    thickness is SKIPPED and logged, never plotted.
+# 2. CONTOUR WINDOWS FROM THE RESULTS. The top of each window is taken from the
+#    production results files at run time (contour_windows), so a window can
+#    never saturate after a re-run.
+# 3. SIDE LEGEND (optional). For the views in SIDE_LEGEND_VIEWS each frame is
+#    rendered twice, legend on and legend off, into <OUT_ROOT>/_raw, and
 #        python code/4_figures_and_drawings/compose_side_legend.py
-#    cuts the legend out (it is exactly where the two renders differ), cuts the
-#    tank out of the legend-off render, and places them side by side. Overlap
-#    is impossible by construction, whatever the tank shape.
-# 4. Output goes to a NEW folder, abaqus_captures_final, so nothing rendered from
-#    the old ODBs can be picked up by mistake.
-# 5. FINAL REPORT. The contour figures of the final report are built from the
-#    single captures (legend and tank in one image) kept in
-#    abaqus_contour_captures_report/, by
-#        python code/4_figures_and_drawings/make_report_contours.py abaqus_contour_captures_report thesis_figures
-#    which replaces the Abaqus legend by a vector colour bar. The side-legend
-#    route of item 3 (compose_side_legend.py, make_contour_panels.py) belongs
-#    to the earlier draft and is kept for the record.
+#    places the legend beside the tank. This route belongs to an earlier draft
+#    of the figures (compose_side_legend.py, make_contour_panels.py); the
+#    thesis figures use make_report_contours.py instead (see the header).
 # ==============================================================================
 
 # ==============================================================================
@@ -104,7 +88,7 @@ QUICK_TEST = False        # True = one ODB only, to check camera and legend
 # 'ALL'    = every aircraft x load case x fill x field x view (1.5-2.5 h).
 FIGURE_SET = 'THESIS'
 
-OUT_ROOT = 'abaqus_captures_resized'   # images of the re-sized walls (27 Sep)
+OUT_ROOT = 'abaqus_captures_resized'   # output folder for the images
                             # canvas size is set per view, see VIEWS below
 
 # Views whose legend is moved beside the tank by compose_side_legend.py.
@@ -114,19 +98,18 @@ SIDE_LEGEND_VIEWS = ['front', 'bottom']
 
 # Views rendered for the contour frames. Only the front view carries a legend;
 # the section view is read against the front view of the same case, so it is
-# rendered without one. The iso view added little and is no longer rendered.
+# rendered without one. 'iso' can be added.
 CONTOUR_VIEWS = ['front', 'sect', 'bottom']
-# 'bottom' (added 27 Sep 2026) looks up at the keel. At low fill the
-# out-of-round deformation between the rings sits on the underside, where the
-# front view cannot show it.
+# 'bottom' looks up at the keel. At low fill the out-of-round deformation
+# between the rings sits on the underside, where the front view cannot show it.
 
 AIRCRAFT = ['E190', 'A320', 'A350']
 LOADCASES = ['Baseline', 'LC1_Maneuver', 'LC3_Combined', 'LC7_Emergency']
 FILLS = [10, 30, 50, 75, 90]
 
-# Thermal fields are identical for Baseline and LC1 because both resultants are
-# purely vertical, so the liquid sits in the same place. Chapter 5 establishes
-# this. Set True to skip the duplicate thermal frames and save 90 images.
+# Thermal fields are identical for the Baseline condition and the symmetric
+# manoeuvre because both load factors are purely vertical, so the liquid sits
+# in the same place (thesis Chapter 5). Set True to skip the duplicate thermal frames and save 90 images.
 SKIP_REDUNDANT_THERMAL = False
 
 # ------------------------------------------------------------------ views -----
@@ -134,9 +117,7 @@ SKIP_REDUNDANT_THERMAL = False
 # it and ignores the vector. Otherwise it falls back to the viewVector.
 # 'size'   canvas in px. The front view of a 6:1 tank wants a wide, short frame;
 #          the iso views run diagonally and need the height.
-# 'legend' top-left corner of the legend box as (x%, y%) of the viewport. The
-#          default (2, 98) puts it straight on top of the tank, which is what
-#          the first test run did. Low-left sits in the dead space instead.
+# 'legend' top-left corner of the legend box as (x%, y%) of the viewport.
 # 'zoom'   applied after fitView, so the model does not touch the frame edge.
 VIEWS = {
     'front': {'saved': 'FRONT',
@@ -153,13 +134,12 @@ VIEWS = {
               'size': (2400, 1100), 'legend': (1, 98), 'zoom': 0.86},
 }
 
-# Render style of the contour frames (27 Sep, 21:45). FILLED is flat and
-# unlit, which reads as bright and flashy; SHADED lights the surface, so the
-# colours sit slightly darker and the curvature of the shell is visible.
+# Render style of the contour frames. FILLED is flat and unlit; SHADED lights
+# the surface, so the curvature of the shell is visible.
 CONTOUR_RENDER = SHADED
 
 # ------------------------------------------------------ zoomed mesh frames ---
-# At the re-sized walls an element is 2 to 4 px in a full view, so a mesh-on
+# At the sized walls an element is 2 to 4 px in a full view, so a mesh-on
 # full view is black. These frames zoom into the middle of the barrel (the mid
 # ring, where the stress field has structure) far enough that the elements are
 # about 15 to 25 px, and are shot twice, with and without edges, so the mesh
@@ -169,12 +149,11 @@ ZOOM_FACTOR = 5.0
 ZOOM_CASES = [('LC7_Emergency', 90, 'mises'), ('LC7_Emergency', 90, 'nt11')]
 ZOOM_VIEWS = ['front', 'iso']
 
-# ALL, EXTERIOR, FEATURE, FREE or NONE.
-# The first test run came back speckled: at 2400 px an E190 element is about
-# 10 px, so 64372 element edges read as grey noise laid over the contours
-# rather than as a mesh. NONE gives the cleanest contour figure; FEATURE keeps
-# the silhouette and the cap-to-barrel junctions. Use FEATURE if NONE looks
-# too floaty, and ALL only for the deliberate mesh figure in Chapter 4.
+# ALL, EXTERIOR, FEATURE, FREE or NONE. At 2400 px the element edges read as
+# grey noise over the contours, so NONE gives the cleanest contour figure; ALL
+# is used only for the mesh figure of Chapter 4. (On this model FEATURE gives
+# the same result as ALL: the free mesh has inconsistent normals, so every edge
+# counts as a feature edge.)
 EDGE_STYLE = NONE
 
 # ------------------------------------------------------------- mesh figure ----
@@ -190,9 +169,8 @@ MESH_SOURCE = {'loadcase': 'Baseline', 'fill': 50}
 MESH_VIEWS = ['front', 'iso']   # front for the to-scale comparison, iso as before
 
 # ------------------------------------------------------- mesh-on comparison ---
-# One case shot twice, identical in every respect except the element edges, so
-# you can see for yourself what the mesh costs a contour figure before
-# committing to mesh-off for the other 540. Produces
+# One case shot twice, identical in every respect except the element edges, to
+# show what the mesh costs a contour figure. Produces
 #   <AC>_COMPARE_f90_mises_front_mesh.png
 #   <AC>_COMPARE_f90_mises_front_nomesh.png
 COMPARE_SHOT = False
@@ -200,42 +178,24 @@ COMPARE_SOURCE = {'loadcase': 'LC7_Emergency', 'fill': 90, 'field': 'mises'}
 COMPARE_VIEWS = ['front']
 
 # ------------------------------------------------- MESH-ON VARIANT RUN -------
-# Set MESH_VARIANT = True to shoot a SECOND copy of the report figures with the
-# element edges left ON, so the mesh-on look can be judged in the report rather
-# than argued about.
-#
-# It writes to a DIFFERENT folder (abaqus_captures_mesh), so the finished
-# mesh-off set is never touched, and it restricts itself to the cases that
-# actually appear in the thesis, so it takes a couple of minutes rather than
-# rerunning all 549.
-#
-# Drop the two sets side by side in Chapter 5, decide, and keep one.
-MESH_VARIANT = False      # 27 Sep: contour figures use outline edges only.
-                          # The full mesh is shown once, in the MESH figure
-                          # (MESH_SHOT above), where it is the subject.
-EDGE_STYLE = NONE         # 27 Sep, 21:40: edges OFF. At the re-sized walls the
-                          # mesh is 3 to 4 times finer (up to 238,169 elements)
-                          # and the edges turned the contours black. The mesh
-                          # itself is still shot once, in MESH_SHOT.
-# (previous setting, 27 Sep afternoon:)
-# EDGE_STYLE = ALL        # 27 Sep decision: element edges ON for the report
-                          # contours (the colours stay readable). NB: FEATURE
-                          # gives the same result on this model - the free mesh
-                          # has inconsistent normals, so every edge counts as a
-                          # feature edge. Use NONE for edge-free contours.
+# Set MESH_VARIANT = True to shoot a SECOND copy of the thesis frames with the
+# element edges ON, written to a different folder (abaqus_captures_mesh) so
+# the mesh-off set is never touched.
+MESH_VARIANT = False      # contour figures without element edges; the mesh is
+                          # shown once, in the MESH figure (MESH_SHOT above)
+EDGE_STYLE = NONE         # edges off: at the sized walls (up to 238,169
+                          # elements) the edges turn the contours black
 
 if MESH_VARIANT:
     EDGE_STYLE = ALL
 
-# (aircraft, load case, fill) triples used by figures in the thesis. Taken from
-# the \includegraphics{abaqus/...} lines of Chapters 4 and 5, plus the A320 and
-# A350 LC7 f10 frames so the fill effect can be shown for all three aircraft.
+# (aircraft, load case, fill) triples used by figures in the thesis, the SAME
+# cases for every aircraft, so each observation of Chapter 5 can be shown for
+# all three tanks side by side:
+#   Baseline f10 / f50 / f90       thermal field and its dependence on fill
+#   LC1_Maneuver f10               out-of-round deformation between the rings
+#   LC7_Emergency f10 / f50 / f90  emergency landing, the governing case
 THESIS_CASES = []
-# The SAME cases for every aircraft, so each observation in Chapter 5 can be
-# shown for all three tanks side by side:
-#   Baseline f10 / f50 / f90   thermal field and its dependence on fill
-#   LC1 f10                    out-of-round deformation between the rings
-#   LC7 f10 / f50 / f90        emergency landing, the governing case
 for _ac in ('E190', 'A320', 'A350'):
     for _lc, _f in (('Baseline', 10), ('Baseline', 50), ('Baseline', 90),
                     ('LC1_Maneuver', 10),
@@ -247,11 +207,9 @@ CASE_FILTER = THESIS_CASES if FIGURE_SET == 'THESIS' else []
 
 # --------------------------------------------------------------- limits -------
 # Per aircraft, because the three tanks have different wall thicknesses and
-# therefore different stress ranges. A single window would render two of the
-# three nearly flat. Values below span the far-field range from the production
-# CSV with a little headroom, and deliberately exclude the ring singularity
-# (E190 68.2, A320 55.0, A350 64.8 MPa) which does not converge and is discarded
-# by the far-field convention.
+# therefore different ranges; a single window would render two of the three
+# nearly flat. The windows exclude the stress singularity at the rings, which
+# does not converge and is discarded by the far-field convention.
 #
 NT11_LIMITS = {
     'E190': (20.3, 24.0),
@@ -259,20 +217,17 @@ NT11_LIMITS = {
     'A350': (20.3, 27.7),
 }
 
-# Von Mises needs a window per LOAD CASE, not just per aircraft. The first test
-# run proved why: a 35-65 MPa window on the Baseline case rendered almost the
-# whole tank below the floor, in the out-of-range colour, because Baseline sits
-# at 38.7-39.0 MPa while LC7 reaches 61.6. One window cannot serve both.
+# Von Mises needs a window per LOAD CASE, not just per aircraft: the Baseline
+# condition and the emergency landing differ so much that one window would
+# put most of the Baseline tank below the floor. Within a load case the window
+# is shared across all five fills, because that is the comparison the fill
+# sweep makes; across load cases the windows differ, in separate figures.
 #
-# Within a load case the window is shared across all five fills - that is the
-# comparison the fill sweep makes, and it must not move between frames.
-# Across load cases the windows differ, but those are separate figures.
-#
-# Values in MPa. Since 27 Sep these are the BASE windows: the floor is used as
-# given, and the top is raised at run time to the next 5 MPa above the largest
-# far-field stress of that (aircraft, load case) in the production CSVs, so a
-# window can never saturate after a re-run. NT11 is treated the same way. The
-# windows actually used are printed to the capture log.
+# Values in MPa. These are BASE windows: the floor is used as given, and the
+# top is raised at run time to the next 5 MPa above the largest far-field
+# stress of that (aircraft, load case) in the production results, so a window
+# can never saturate. NT11 is treated the same way. The windows actually used
+# are printed to the capture log.
 MISES_WINDOW_BASE = {
     ('E190', 'Baseline'):      (20, 40),
     ('E190', 'LC1_Maneuver'):  (20, 40),
@@ -367,11 +322,9 @@ def open_odb(path):
     raise Exception(last)
 
 
-# Where each aircraft's CURRENT ODBs live, in order of preference.
-#   E190 : E190\ (19 Sep) or the root (26 Sep re-run; bit-identical results).
-#   A320, A350 : the ROOT ONLY. Their sub-folders hold the superseded
-#                old-thickness ODBs and must never be read.
-ODB_DIRS = {'E190': ['.'], 'A320': ['.'], 'A350': ['.']}   # 27 Sep: all current ODBs are in the root
+# Folders searched for each aircraft's databases, in order of preference,
+# relative to the working folder.
+ODB_DIRS = {'E190': ['.'], 'A320': ['.'], 'A350': ['.']}
 
 MASTER_SCRIPT = os.path.join('code', '1_abaqus_model', 'E190_MASTER_thermo_structural.py')
 try:    # repository layout: the master script sits next to this one
@@ -460,14 +413,10 @@ def thickness_ok(odb, aircraft, path, expected):
 
 def read_results():
     """
-    Far-field results per (aircraft, load case, fill) from the CURRENT CSVs.
-
-    E190   : E190_production*_results.csv in the root (re-run at the corrected wall).
-    A320/50: <AC>_production*_results.csv in the ROOT only - this picks up the
-             full run and the single-case re-runs. The A320/A350 rows inside
-             ALL_AIRCRAFT and the files in the sub-folders are the superseded
-             old-thickness results and are deliberately not read.
-    Later files override earlier ones for the same case.
+    Far-field results per (aircraft, load case, fill) from the results files
+    <AC>_production*_results.csv in the working folder. Only rows at the
+    expected wall are read; later files override earlier ones for the same
+    case.
     """
     rows = {}
 
@@ -479,7 +428,7 @@ def read_results():
                 key = (ac, r['load_case'], int(round(float(r['fill']) * 100)))
                 tw = r.get('t_wall_mm')
                 if not tw or abs(float(tw) - EXPECTED_T_NOW[ac] * 1e3) > 1e-4:
-                    continue        # superseded wall, or a file from before 27 Sep
+                    continue        # another wall thickness: not the current model
                 rows[key] = r
         except Exception as e:
             log('  NOTE: could not read %s (%s)' % (os.path.basename(path), e))
@@ -565,10 +514,9 @@ def apply_edges(vp):
     """
     Set the edge style immediately before printing.
 
-    The first test run came back with the mesh visible despite visibleEdges
-    being set in style_contours(), so it is reapplied here, after the field,
-    the view and the cut are all in place. Cheap insurance: whatever reset it,
-    this runs last.
+    visibleEdges set in style_contours() can be reset by later display
+    changes, so it is reapplied here, after the field, the view and the cut
+    are in place.
     """
     try:
         vp.odbDisplay.commonOptions.setValues(visibleEdges=EDGE_STYLE)

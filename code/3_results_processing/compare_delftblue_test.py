@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-DelftBlue (Abaqus 2024) versus laptop (Abaqus 2025): one-case comparison.
+SOLVER CHECK: DelftBlue cluster (Abaqus 2024) against the workstation
+(Abaqus 2025), one design point.
 
-The test case is A350 Baseline at 10 % fill, the smallest production model
-(126,816 elements at the sized wall of 5.674 mm). It already exists on the
-laptop, so the DelftBlue run can be compared number by number.
+The test case is the A350 Baseline condition at a fill level of 0.10, the
+smallest production model (126,816 elements at the sized wall of 5.674 mm).
+It exists in the workstation results, so the cluster run can be compared
+number by number before the cluster is used for the remaining stages. The
+recorded outcome is in results/solver_check_delftblue/.
 
 ON DELFTBLUE (after the upload of the thesis folder):
     mkdir -p /scratch/$USER/dbtest/code/1_abaqus_model
@@ -15,7 +18,7 @@ ON DELFTBLUE (after the upload of the thesis folder):
       --export=ALL,WORKDIR=/scratch/$USER/dbtest,AC=A350,STAGE=production,E190_ONLY_LC=Baseline,E190_ONLY_FILL=0.1 \
       code/1_abaqus_model/run_final_delftblue.sh
 
-ON THE LAPTOP, when it has finished (new Command Prompt):
+ON THE WORKSTATION, when it has finished (new Command Prompt):
     cd <local working folder>
     mkdir delftblue_test
     scp <netid>@login.delftblue.tudelft.nl:/scratch/<netid>/dbtest/A350_production*_results.csv delftblue_test\\
@@ -74,4 +77,4 @@ if dbl['n_el'].split('.')[0] == lap['n_el'].split('.')[0] and worst < 0.5:
 elif worst < 2.0:
     print('Mesh or results differ slightly: acceptable for the check stages, state it in the report.')
 else:
-    print('RESULTS DIFFER: do not use DelftBlue for the thesis stages; send this output to Claude.')
+    print('RESULTS DIFFER: do not use DelftBlue for the thesis stages.')

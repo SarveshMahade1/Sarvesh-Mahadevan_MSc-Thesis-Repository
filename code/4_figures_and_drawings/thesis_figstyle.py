@@ -1,22 +1,18 @@
 """
 ================================================================================
-SHARED FIGURE STYLE AND OUTPUT — TU Delft MSc thesis
+SHARED FIGURE STYLE AND OUTPUT, TU Delft MSc thesis
 Author: Sarvesh Mahadevan
 
-Import this from every plotting script so all figures share one look and one
-output path. Two things it fixes.
+Imported by every plotting script, so all figures share one look, one set of
+colours and labels (AC_COLOR, AC_LABEL, LC_LABEL) and one output path.
 
 --------------------------------------------------------------------------------
 1. VECTOR OUTPUT
 --------------------------------------------------------------------------------
-Every figure was previously written as a 200 dpi PNG. A raster figure is fixed
-at the resolution it was written: text edges are soft on screen, lines alias
-when the figure is scaled, and zooming in on a printed PDF shows pixels.
-
-These figures are line art — axes, curves, markers, text. Line art belongs in a
-vector format, where there is no resolution at all: the curve is stored as a
-curve and the renderer draws it at whatever resolution the output device has.
-pdflatex embeds PDF natively, so this is also the cheaper path.
+The figures are line art: axes, curves, markers, text. Line art belongs in a
+vector format, where the curve is stored as a curve and drawn at whatever
+resolution the output device has; a raster figure has soft text and aliased
+lines when scaled. pdflatex embeds PDF natively.
 
 save() therefore writes a PDF as the primary artefact and a 400 dpi PNG
 alongside it for previewing. In LaTeX, reference the figure WITHOUT an
@@ -29,11 +25,8 @@ graphicx then prefers the PDF automatically.
 --------------------------------------------------------------------------------
 2. TEXT BELONGS IN THE CAPTION, NOT IN THE IMAGE
 --------------------------------------------------------------------------------
-Each script previously drew a bold suptitle and a grey explanatory paragraph
-inside the figure. That text is already in the LaTeX caption, so it appeared
-twice on the page, and it crowded the panels that carry the actual result.
-
-A figure should carry labelling only: axis labels, units, tick values, legend,
+Explanatory text belongs in the LaTeX caption; inside the figure it would
+appear twice on the page and crowd the panels. A figure should carry labelling only: axis labels, units, tick values, legend,
 and any annotation that points at a specific feature. Everything else is the
 caption's job. apply_style() sets type sizes on the assumption that the figure
 is scaled to roughly text width, so the smallest text on the page is still
@@ -56,8 +49,8 @@ FIG_W = 0.8 * 455.24 / 72.27
 # One colour per aircraft, used in every figure of the report.
 AC_COLOR = {'E190': '#1F3864', 'A320': '#2E7D32', 'A350': '#C00000'}
 AC_LABEL = {'E190': 'E190', 'A320': 'A320', 'A350': 'A350-900'}
-# Load cases are named by their physical condition (October 2026); the
-# internal keys keep the original identifiers of the result files.
+# Load cases are named by their physical condition; the internal keys are the
+# load-case codes of the result files.
 LC_LABEL = {'Baseline': 'Baseline condition', 'LC1_Maneuver': 'Symmetric manoeuvre',
             'LC3_Combined': 'Combined manoeuvre', 'LC7_Emergency': 'Emergency landing'}
 
@@ -66,7 +59,7 @@ def apply_style():
     """Type sizes and line weights for a figure reproduced at text width."""
     plt.rcParams.update({
         # --- type ---------------------------------------------------------
-        # 28 Sep 2026: the report is set in Times (newtx), so the figures use
+        # The report is set in Times (newtx), so the figures use
         # TeX Gyre Termes (a Times design) with STIX mathematics, and sizes
         # chosen for a figure drawn at its printed width (FIG_W below), so
         # the type in a figure prints at the same size as the caption text.
@@ -122,7 +115,7 @@ def save(fig, path, png_dpi=400):
 
 
 # ---------------------------------------------------------------------------
-# Panel conventions (October 2026). Every result graph of the report follows
+# Panel conventions. Every result graph of the report follows
 # the same rules: one quantity and one aircraft (or load case) per panel, an
 # individual y-scale per panel so that small changes remain visible, the value
 # written next to every plotted point, and a note in the upper left corner

@@ -23,6 +23,7 @@ results/processed/insulation.json (written by insulation_sizing.py), so the
 jacket follows the sized vessel and its own blanket.
 
 RUN (from anywhere):   python code/2_requirements_and_sizing/outer_jacket_closed_form.py
+OUTPUT                 printed table of the jacket thickness per aircraft
 ================================================================================
 """
 import csv
@@ -33,12 +34,13 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import repo_paths as RP  # noqa: E402
+import design_basis as DB  # noqa: E402  (single source of the design inputs)
 
-E, NU, P_EXT, FOS = 73.1e9, 0.33, 101325.0, 1.5
-R_MID = {'E190': 1.3015, 'A320': 1.7080, 'A350': 2.5771}
+E, NU, P_EXT, FOS = DB.MAT['E_Pa'], DB.MAT['nu'], DB.PRESS['p_ambient_Pa'], DB.CRIT['yield_margin']
 T_WALL = {}
 for r in csv.DictReader(open(RP.SIZED_WALLS)):
     T_WALL[r['aircraft']] = float(r['t_wall_mm']) / 1000.0
+R_MID = dict((ac, DB.geometry(ac)['R']) for ac in DB.AIRCRAFT if ac in T_WALL)   # sized aircraft only
 _INS = json.load(open(os.path.join(RP.PROCESSED, 'insulation.json')))
 MLI = {ac: _INS[ac]['mli_mm'] / 1000.0 for ac in R_MID}
 SPACINGS = (0.25, 0.5, 1.0, 2.0)

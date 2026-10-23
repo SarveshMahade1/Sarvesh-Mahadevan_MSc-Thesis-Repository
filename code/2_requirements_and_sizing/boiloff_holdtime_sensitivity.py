@@ -4,25 +4,26 @@ SENSITIVITY OF THE INSULATION DESIGN TO THE REQUIRED NO-VENT HOLD TIME
 Pure Python + CoolProp + matplotlib - TU Delft MSc thesis
 
 Author: Sarvesh Mahadevan
-Date: September 2026
+
+RUN      python code/2_requirements_and_sizing/boiloff_holdtime_sensitivity.py
+INPUTS   code/design_basis.json (pressures, ambient and liquid temperature,
+         effective MLI conductivity, adopted hold time) and
+         results/processed/final_numbers.json (heat leak budgets); needs CoolProp
+OUTPUTS  thesis_figures/17_boiloff_holdtime_sensitivity.png and a printed table
 
 --------------------------------------------------------------------------------
-WHY THIS SCRIPT EXISTS
+PURPOSE
 --------------------------------------------------------------------------------
 boiloff_requirement_derivation.py establishes that the heat-leak budget follows
 from a required no-vent hold time rather than from an assumed boil-off
 percentage. That leaves one design choice: how long the tank must be able to
 sit sealed.
 
-This script sweeps that choice and shows what it costs. For each aircraft it
-propagates the hold time through the same steady-state resistance network used
-in the *_vacuum_mli_gradient.py scripts, and reports the required MLI
-thickness, the resulting outer-jacket diameter and the insulation mass.
-
-This is the parametric study the thesis previously lacked: it converts a single
-assumed number into a demonstrated trade.
-
-GENERATES: latex/figures/17_boiloff_holdtime_sensitivity.png
+This script sweeps that choice (2 h to 36 h) and shows what it costs. For each
+aircraft it propagates the hold time through a steady-state resistance
+network (FORMULAS 3 to 6) and reports the required MLI thickness, the
+resulting outer-jacket diameter and the insulation mass, which turns the
+single hold-time requirement into a demonstrated trade.
 
 --------------------------------------------------------------------------------
 FORMULAS USED
@@ -48,6 +49,7 @@ import os as _os
 import sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
 import repo_paths as RP  # noqa: E402  (folder layout of the repository)
+import design_basis as DB  # noqa: E402  (single source of the design inputs)
 import thesis_figstyle as tfs
 tfs.apply_style()
 import numpy as np
@@ -61,18 +63,18 @@ from boiloff_requirement_derivation import (
 
 
 # --- Thermal model constants, identical to the *_vacuum_mli_gradient.py scripts ---
-T_AMBIENT = 293.0       # K
-T_LIQUID = 20.0         # K
+T_AMBIENT = DB.TH['T_ambient_K']     # K
+T_LIQUID = 20.0         # K, end temperature of the insulation network (thesis Section 3.4)
 K_INNER = 116.0         # W/m-K, Al 2219-T87
 K_OUTER = 116.0         # W/m-K
-K_EFF_MLI = 0.0003      # W/m-K, installed (non-ideal) blanket - SOURCE STILL OPEN
+K_EFF_MLI = DB.TH['k_mli_effective_W_per_mK']   # W/m-K, installed blanket, adopted engineering value
 H_CONV = 10.0           # W/m2-K, external natural convection
 T_WALL_INNER = 0.002    # m
 T_WALL_OUTER = 0.001    # m
 RHO_MLI = 173.0         # kg/m3, aluminised-mylar/scrim blanket bulk density
 
 # The design point adopted in the thesis.
-T_HOLD_DESIGN_H = 14.68
+T_HOLD_DESIGN_H = DB.BUDGET['hold_time_h']
 
 
 def required_mli_thickness(R_mid, L_tank, Q_target):
@@ -183,7 +185,7 @@ def main():
 
 
 def plot_per_aircraft(results, hold_h):
-    """Figure 17 (October 2026): one column per aircraft, each with its own
+    """Figure 17: one column per aircraft, each with its own
     scales. Top row: allowable heat leak Q against the hold time. Bottom row:
     the MLI thickness that delivers exactly that Q. The points at 6, 14.7, 24
     and 36 h carry their values; the note gives the constant energy Q t_hold

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-WRITES APPENDIX A (CALCULATION TRACEABILITY) FROM THE RESULTS FILES (28 Sep 2026)
-================================================================================
+WRITES APPENDIX A (CALCULATION TRACEABILITY) FROM THE RESULTS FILES
+===================================================================
 
 Every number in Appendix A is inserted by this script from
 results/processed/final_numbers.json, results/processed/hand_calcs.json and

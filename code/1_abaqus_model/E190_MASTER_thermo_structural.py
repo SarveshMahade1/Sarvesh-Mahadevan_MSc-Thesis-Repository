@@ -1,21 +1,152 @@
 """
 ================================================================================
-E190 LH2 INNER VESSEL - SEQUENTIALLY COUPLED THERMO-STRUCTURAL ANALYSIS
-E190_MASTER_thermo_structural.py   (version 3)
-Abaqus/CAE Python script - TU Delft MSc thesis
+LH2 INNER VESSEL: SEQUENTIALLY COUPLED THERMO-STRUCTURAL ANALYSIS
+E190_MASTER_thermo_structural.py
 
+Abaqus/CAE Python script of the MSc thesis "Digitalized Workflow of a Liquid
+Hydrogen Tank Integrating Thermo-Structural Analysis", TU Delft.
 Author: Sarvesh Mahadevan
-Date: September 2026
 
-Version 2 (yield + buckling, ring/saddle mounts, uniform 20 K field) is
-preserved at _originals/E190_MASTER_thermo_structural_v2_buckling_mounts.py.
-See CHANGELOG.md for why it was superseded.
+Despite the file name, one script serves every aircraft of the design basis
+(in the thesis: E190, A320 and A350-900). Only the geometry, the wall
+thickness and the heat leak budget differ between them; every boundary
+condition, load case, criterion and extraction step is shared.
 
 --------------------------------------------------------------------------------
-THE ADOPTED METHODOLOGY, AND WHERE EACH STEP COMES FROM
+WHAT THE SCRIPT DOES
 --------------------------------------------------------------------------------
-The modelling PROCESS used here is not invented for this thesis. It is the
-published, peer-reviewed approach of
+For each design point (one load case at one fill level) the inner vessel is
+built as a revolved shell and two analyses are solved in sequence:
+
+  STEP 1  Steady-state heat transfer. The wall below the liquid free surface
+          exchanges heat with the liquid (film coefficient h_wetted), the wall
+          above it with the ullage gas (h_dry). The heat leak through the
+          insulation enters as a uniform flux on the outer face.
+          Result: the nodal temperature field T(x).
+
+  STEP 2  Static structural analysis. Loads: the temperature field of step 1,
+          the internal pressure plus the hydrostatic head of the liquid, and
+          the inertia of the shell. Supports: three circumferential rings.
+
+The liquid free surface is normal to the resultant load factor (relative
+equilibrium of a liquid under steady acceleration). The load case therefore
+changes both the wetted area, which drives the thermal problem, and the depth
+of liquid, which drives the structural problem. This is how the fill level
+couples the two analyses.
+
+From each design point the script extracts the far-field von Mises stress,
+the axial membrane stress used by the buckling criterion, temperatures,
+displacements, support reactions and a set of verification checks, and writes
+them to a results file.
+
+The run modes build the workflow of the thesis on this core:
+
+  SIZING       iterate the wall until the yield or the buckling criterion is
+               just met in the governing case; records sized_walls.csv
+  PRODUCTION   every load case at every fill level, at the design pressure
+  STABILITY    the same matrix at the stability pressure
+  CONVERGENCE  the governing case over a sweep of mesh densities
+  FINAL        SIZING, PRODUCTION, STABILITY and CONVERGENCE in one session
+
+--------------------------------------------------------------------------------
+HOW TO RUN
+--------------------------------------------------------------------------------
+From an empty working folder, which receives the .odb and results files:
+
+    abaqus cae noGUI=<repository>/code/1_abaqus_model/E190_MASTER_thermo_structural.py
+
+The run is controlled by code/design_basis.json and by environment variables,
+so nothing in this file needs editing. The most used variables:
+
+    E190_AIRCRAFT     E190 | A320 | A350 | any aircraft added to the design basis
+    E190_RUN_MODE     FINAL | SIZING | PRODUCTION | STABILITY | CONVERGENCE
+    E190_STAGES       subset of sizing,production,stability,convergence (FINAL)
+    E190_DRY_RUN=1    print the resolved inputs and first-order checks, then
+                      stop. Runs in plain Python 3, without an Abaqus licence:
+                      E190_DRY_RUN=1 python E190_MASTER_thermo_structural.py
+    LH2_DESIGN_BASIS  path of an alternative design basis file
+
+The others (E190_ONLY_LC, E190_ONLY_FILL, E190_T_WALL, E190_P_GAUGE,
+E190_BENCHMARK, E190_WORKDIR, E190_ALPHA, E190_KAPPA, E190_MIN_GAUGE_MM,
+E190_CONV_FRACTIONS) are listed in the README and explained where they are
+read below.
+
+--------------------------------------------------------------------------------
+INPUTS AND OUTPUTS
+--------------------------------------------------------------------------------
+Inputs
+  code/design_basis.json  aircraft geometry and heat leak budget, material,
+                          margins, pressures, thermal boundary conditions,
+                          load cases, fill levels, mesh and extraction rules
+                          (read through code/design_basis.py)
+  sized_walls.csv         sized wall of each aircraft, from the working
+                          folder or from results/ of the repository
+
+Outputs (in the working folder; <AC> is the aircraft code)
+  <AC>_production_results.csv           design pressure matrix
+  <AC>_stability_results.csv            stability pressure matrix
+  <AC>_convergence_pdesign_results.csv  mesh study, design pressure
+  <AC>_convergence_pmin_results.csv     mesh study, stability pressure
+  sizing_fe/<AC>/<AC>_sizing_results.csv, sized_walls.csv
+  HT_<tag>.odb and ST_<tag>.odb         heat transfer and static databases
+  The columns of the results files are described in the README.
+
+--------------------------------------------------------------------------------
+CONVENTIONS
+--------------------------------------------------------------------------------
+  Axes          Global X forward along the tank axis, Y up, Z lateral
+                (right-handed, as the Abaqus triad). The tank runs from the aft
+                pole at x = -h_cap to the forward pole at x = L_barrel + h_cap;
+                the barrel occupies 0 <= x <= L_barrel.
+  Load factors  n = (nx forward, ny lateral, nz vertical) in g, named as in
+                CS-25 by the direction in which the inertia force acts on the
+                tank. In model axes the acceleration is (+nx, -nz, -ny) g.
+  Shell faces   side2 is the inner (wetted) face, side1 the outer face.
+  Units         SI throughout (m, kg, s, K, Pa, W). Printed values use mm,
+                MPa, kN and bar where stated.
+  Load-case codes, used in job and file names (labels from the design basis):
+                Baseline        Baseline condition   (nx, ny, nz) = (0, 0, 1)
+                LC1_Maneuver    Symmetric manoeuvre  (0, 0, 2.5)
+                LC3_Combined    Combined manoeuvre   (1.5, 0, 2.5)
+                LC7_Emergency   Emergency landing    (9, 3, 6)
+
+--------------------------------------------------------------------------------
+SECTION MAP
+--------------------------------------------------------------------------------
+  0  Imports, design basis, working folder
+  1  USER INPUTS       run mode, aircraft, material, criteria, pressures,
+                       thermal boundary conditions, load cases, fill levels,
+                       mesh rules (values from the design basis)
+  2  DERIVED GEOMETRY  cap height, volume, exact shell area, insulation flux
+  3  HELPER FUNCTIONS
+       effective_down, free_surface_offset  free surface for any load case
+       build_geometry_and_mesh              revolved shell, material, mesh
+       apply_ring_constraints               the three ring supports
+       split_wetted_dry                     wetted and dry inner surfaces
+       job_succeeded                        job completion read from the .log
+       Alternative models kept for future studies (not called):
+       fill_surface_height, elem_centroid_z, apply_inertia_relief,
+       apply_rigid_body_restraint
+  4  THE ANALYSIS
+       run_case   one design point: heat transfer, then static
+       extract    results and verification checks of one design point
+  5  DRIVER      stage_sizing, stage_matrix, stage_convergence, the dry run
+                 and the selection of the run modes
+  6  OUTPUT      results file and summary of a single-mode run
+
+Where to add something
+  aircraft, material, load case, fill level   design_basis.json only
+  a boundary condition or a load              run_case
+  a result column                             extract (returned dict) and EXTRA_KEYS
+  a sizing criterion                          extract, then stage_sizing
+docs/analysis_guide.md describes every step of the method, its equations and
+assumptions, and how to extend it. Development history: DEVELOPMENT_NOTES.md
+in this folder.
+
+--------------------------------------------------------------------------------
+METHODOLOGY AND SOURCES
+--------------------------------------------------------------------------------
+The modelling process follows the published approach of
 
     Bagarello, S., Campagna, D. and Benedetti, I., "Computational
     thermo-mechanical modelling and design-space exploration of cryogenic
@@ -27,214 +158,139 @@ supplemented on the inner-vessel treatment by
     Biancotto, A., "Design and analysis of LH2 tank structures for aircraft
     retrofit applications", MSc thesis, Delft University of Technology, 2024.
 
-Adopting a verified process, rather than assembling one, is what allows the
-results of this thesis to be trusted. Each step below is tagged in the code
-with "PROCESS n" at the point where it is implemented.
+Each step is tagged "PROCESS n" in the code where it is implemented.
 
-  1  Prescribe only the two SINK temperatures: the compartment outside the
-     tank and the fuel inside it. Every wall temperature is unknown and is
-     solved for.                                        [Bagarello Sec. 3.1]
+  1  Prescribe only the two SINK temperatures, of the compartment outside the
+     tank and of the fuel inside it. Every wall temperature is solved for.
+                                                        [Bagarello Sec. 3.1]
+  2  Steady-state, linear thermo-elastic analysis.        [Bagarello Sec. 3]
+  3  The fill level partitions the inner surface into a wetted and a dry
+     region.                                            [Bagarello Sec. 3.1]
+  4  Two film coefficients that differ by orders of magnitude: the wetted
+     wall is held near the fuel temperature, the dry wall rejects heat to the
+     vapour by natural convection and runs warmer. This makes the fill level
+     a thermal variable and couples the thermal and structural problems.
+                                                        [Bagarello Sec. 3.1]
+  5  Thermal problem first, then the nodal temperature field carried into the
+     structural problem through sigma = C : (eps - alpha*dT).
+                                                         [Bagarello Eq. (6)]
+  6  Supports: three circumferential rings at the two cap-to-barrel
+     junctions and at mid-barrel, taken from H2FLY testbed hardware.
+                                                      [Bagarello Sec. 4.4.1]
+  7  Mesh convergence against a physical output.          [Bagarello Fig. 4]
+  8  Failure criterion matched to the material class: von Mises for an
+     isotropic metal, with a project design margin of 1.5 (not the CS-25
+     factor of safety; thesis Section 3.6), plus an axial buckling criterion
+     (NASA SP-8007).                                    [Bagarello Sec. 4.4]
+  9  Realism added in increments whose effects can be attributed.
+                                                           [Bagarello Sec. 4]
+ 10  The inner vessel as the design subject, with dT and dp as the primary
+     loads. The outer jacket, insulation and struts are not modelled; the
+     insulation enters only as the heat flux on the outer face.
+                                                     [Biancotto Sec. 5.8.2]
+ 11  Supports characterised by axial and flexural stiffness rather than as
+     rigid restraints, where they are introduced.     [Biancotto Sec. 5.8.1]
 
-  2  Declare the analysis regime explicitly: steady-state, linear
-     thermo-elastic.                                      [Bagarello Sec. 3]
+Extensions made in this thesis, which neither source performs:
 
-  3  Treat the fill ratio as a free parameter that partitions the inner
-     surface into a wetted region and a dry region.     [Bagarello Sec. 3.1]
+  A  A CS-25 load matrix coupled to the fill level. Bagarello et al. apply
+     thermal load and internal pressure only; here the CS 25.337 manoeuvre
+     and CS 25.561 emergency landing factors act on the vessel wall through
+     the hydrostatic head and the shell inertia, at every fill level.
+  B  Cross-aircraft consistency. One sizing rule and one method applied to a
+     regional, a narrow-body and a wide-body aircraft.
 
-  4  Apply two film coefficients that differ by orders of magnitude. The
-     wetted wall is effectively pinned to the fuel temperature; the dry wall
-     rejects heat into hydrogen vapour by natural convection and therefore
-     runs warmer. THIS IS THE STEP THAT MAKES FILL RATIO A THERMAL VARIABLE,
-     and it is the mechanism by which the thermal and structural sides of
-     this thesis are coupled.                           [Bagarello Sec. 3.1]
-
-  5  Solve the thermal problem first, then carry the resulting nodal
-     temperature field into the structural problem through
-     sigma = C : (eps - alpha*dT).                       [Bagarello Eq. (6)]
-
-  6  Stage the mechanical boundary conditions. The baseline removes rigid
-     body motion and nothing else; a realistic anchoring layout is a
-     SEPARATE, LATER study. Bagarello et al. report that adding realistic
-     integration constraints produces a fourfold increase in liner stress,
-     so this omission is quantified rather than unstated.
-                                                       [Bagarello Sec. 4.4.1]
-
-  7  Converge the mesh against a physical output plotted versus degrees of
-     freedom, rather than against element count alone.    [Bagarello Fig. 4]
-
-  8  Match the failure criterion to the material class and apply the
-     regulatory safety factor. For an isotropic metallic vessel this is von
-     Mises with SF = 1.5 per CS-25.303.                  [Bagarello Sec. 4.4]
-
-  9  Build realism progressively: ideal baseline first, then constraints,
-     then geometric features, each increment isolated so its effect can be
-     attributed.                                           [Bagarello Sec. 4]
-
- 10  Treat the inner vessel as the design subject in its own right, with
-     delta-T and delta-p as the primary load case.       [Biancotto Sec. 5.8.2]
-
- 11  Where supports are eventually introduced, characterise them by axial
-     and flexural stiffness rather than as rigid restraints.
-                                                        [Biancotto Sec. 5.8.1]
+The thermal and structural problems are solved sequentially (PROCESS 5)
+because the mechanical response does not feed back into the thermal problem
+at these strain levels.
 
 --------------------------------------------------------------------------------
-WHAT THIS THESIS DOES THAT THE SOURCE WORK DOES NOT
+FORMULAS (tagged "FORMULA n" at each point of use)
 --------------------------------------------------------------------------------
-The process above is adopted. The following extensions are the contribution
-of this thesis, and neither source paper performs them:
-
-  A  A FULL CS-25 LOAD MATRIX COUPLED TO FILL RATIO. Bagarello et al. apply
-     thermal load and internal pressure only. They do not apply the CS-25.337
-     manoeuvre factor or the CS-25.561 emergency landing factors, and they do
-     not couple those factors to the fill ratio through the hydrostatic head.
-     Biancotto applies CS-25.561 ultimate forces, but to the support
-     structure rather than as a stress field on the vessel wall.
-
-  B  CROSS-AIRCRAFT CONSISTENCY. Both sources analyse a single tank. Here one
-     sizing rule and one methodology are applied across a regional, a
-     narrow-body and a wide-body aircraft, which is what permits a statement
-     about how the design scales with mission.
+  1  Tank volume           V = pi*R^2*L_barrel + (4/3)*pi*R^2*h_cap
+  2  Cap height            h_cap = R / (a/b)
+  3  Free surface          plane normal to the load factor that leaves the
+                           fraction phi_f of the tank volume below it
+                           (horizontal special case: theta - sin(theta) = 2*pi*phi_f)
+  4  Convective flux       q = h * (T_wall - T_fluid)
+  5  Insulation heat flux  q_MLI = Q_budget / A_shell
+  6  Pressure              p = p_gauge + rho_LH2 * |n|*g * depth
+  7  Inertial body force   a = n * g on the shell mass
+  8  Thermal strain        eps_th = alpha * (T - T_ref)
+  9  von Mises stress      sig_eq = sqrt(0.5*[(s1-s2)^2+(s2-s3)^2+(s3-s1)^2])
+ 10  Allowable stress      sig_allow = F_ty / SF
 
 --------------------------------------------------------------------------------
-WHAT CHANGED FROM VERSION 2
+DATA SOURCES (values in code/design_basis.json)
 --------------------------------------------------------------------------------
-Four deliberate changes:
-
-  1. INNER VESSEL ONLY (PROCESS 10). The outer jacket, MLI, struts and
-     airframe mounts are not modelled. The MLI appears only as a heat flux
-     boundary condition on the outer face of the vessel.
-
-  2. A REAL LOAD PATH (PROCESS 6). The vessel is restrained on THREE
-     CIRCUMFERENTIAL RINGS, at the two cap-to-barrel junctions and at
-     mid-barrel, after Bagarello et al. Sec. 4.4.1, who take the arrangement
-     from H2FLY testbed hardware.
-
-     Two earlier attempts were rejected on physical grounds:
-
-       - A 3-2-1 restraint carries zero load only for SELF-EQUILIBRATED
-         loads. The CS-25 inertia cases are not: under LC7 the hydrostatic
-         pressure field alone has a resultant of 562 kN, which was driven
-         through three nodes and returned 4943 MPa.
-
-       - Inertia relief removed that artefact but introduced another. The
-         balancing acceleration is distributed in proportion to mass, and
-         the liquid has no mass in the model, so the entire liquid reaction
-         was smeared over the 1648 kg shell as a fictitious body force of
-         up to 34.8 g. It also cancels the shell's own body force exactly,
-         so the applied inertia did nothing at all.
-
-     The deeper point is that a CS-25 load factor PRESUPPOSES a load path.
-     A freely floating tank does not experience a crash load; it simply
-     accelerates. The stress arises from being held. Modelling the restraint
-     is therefore not an optional refinement, it is what makes the load case
-     meaningful. The reaction at the rings is reported as a result, because
-     it is the force the support structure must carry.
-
-     Bagarello et al. report that introducing this anchoring raises liner
-     stress roughly fourfold relative to rigid-body-removal alone.
-
-  3. NO BUCKLING (PROCESS 8). The sizing criterion is yield only, assessed
-     through von Mises with a safety factor of 1.5 per CS-25.303. Stability assessment
-     requires imperfection sensitivity and post-buckling behaviour, which are
-     outside the linear scope of this work.
-
-  4. THE THERMAL LOAD IS NOW REAL (PROCESS 3 and 4). The previous model
-     applied a uniform 20 K field to a body that was free to contract, which produces exactly zero
-     thermal stress. Here the wetted and dry regions of the wall are treated
-     separately, exactly as Bagarello et al. do: the wall below the liquid
-     surface is pinned at the fuel temperature, while the wall above it
-     exchanges heat with the ullage gas by natural convection at a much lower
-     film coefficient, and therefore runs warmer. THE FILL RATIO GENERATES THE
-     TEMPERATURE GRADIENT, so the thermal and structural sides are coupled
-     through the variable this thesis is about.
+  Al 2219-T87 properties   thesis Table 3.3 (MIL-HDBK-5J), cross-checked
+                           against Bagarello Table 1
+  T_LH2 = 20.3 K           Bagarello Sec. 3.1
+  h_dry = 1.46 W/m2K       Bagarello Sec. 3.1, their ref. [45]: natural
+                           convection of hydrogen vapour at the dry wall
+  SF = 1.5                 project design margin (thesis Section 3.6), not
+                           the CS 25.303 factor of safety
+  Load factors             CS 25.337 and CS 25.561
+  Q_budget                 boiloff_requirement_derivation.py, from the
+                           14.68 h no-vent hold time (E190: 702.6 W)
+  Geometry                 sizing rule of thesis Section 3.1, R = 0.8648 D/2
+                           (code/2_requirements_and_sizing/tank_geometry_from_mission.py)
 
 --------------------------------------------------------------------------------
-ANALYSIS CHAIN
+BENCHMARK
 --------------------------------------------------------------------------------
-  STEP 1  Steady-state heat transfer    -> nodal temperature field T(x)
-  STEP 2  Static structural analysis, reading T(x) as a predefined field,
-          plus internal pressure, hydrostatic head and CS-25 inertia
-
-This is a SEQUENTIALLY coupled analysis (PROCESS 5). It is valid because the
-mechanical response does not feed back into the thermal problem at these strain levels.
-
---------------------------------------------------------------------------------
-FORMULAS USED (tagged "FORMULA n" at each point of use below)
---------------------------------------------------------------------------------
-  1  Tank volume            V = pi*R^2*L_barrel + (4/3)*pi*R^2*h_cap
-  2  Cap height             h_cap = R / (a/b)
-  3  Fill surface height    theta - sin(theta) = 2*pi*phi_f   (circular segment)
-  4  Convective flux        q = h * (T_wall - T_fluid)
-  5  MLI heat flux          q_MLI = Q_budget / A_shell
-  6  Hydrostatic pressure   p(z) = p_gauge + rho_LH2 * (n*g) * depth
-  7  Inertial body force    f = n * g   (applied to the shell's own mass)
-  8  Thermal strain         eps_th = alpha * (T - T_ref)
-  9  von Mises stress       sig_eq = sqrt(0.5*[(s1-s2)^2+(s2-s3)^2+(s3-s1)^2])
- 10  Allowable stress       sig_allow = sigma_yield / SF
-
---------------------------------------------------------------------------------
-DATA SOURCES
---------------------------------------------------------------------------------
-  Al 2219-T87 properties      : thesis material table (ref7), cross-checked
-                                against Bagarello Table 1
-  T_LH2 = 20.3 K              : Bagarello Sec. 3.1
-  h_int = 1.46 W/m2K          : Bagarello Sec. 3.1, their ref [45], for GH2
-                                natural convection against the dry wall
-  SF = 1.5                    : CS-25.303 (ref22); Bagarello cite FAR 25.303
-  CS-25 load factors          : CS-25.337 and CS-25.561 (ref22)
-  Q budget = 702.6 W          : derived in boiloff_requirement_derivation.py
-                                from a 14.68 h no-vent hold time
-  Geometry                    : thesis sizing rule, R = 0.8648*D_fuselage/2
-
---------------------------------------------------------------------------------
-BENCHMARK TARGET
---------------------------------------------------------------------------------
-Bagarello et al. report, for their reference tank at a filling ratio of 0.75,
-that the wetted liner sits at 20 K while the dry region peaks at 25.3 K. Set
-BENCHMARK_MODE = True to run their geometry and operating point instead of the
-E190, and compare the predicted peak wall temperature against that 25.3 K.
+Bagarello et al. report for their reference tank at a fill level of 0.75 a
+wetted liner at 20 K and a dry region peaking at 25.3 K. E190_BENCHMARK=1
+runs their geometry and operating point instead of an aircraft, and the
+summary compares the predicted peak wall temperature with 25.3 K.
 ================================================================================
 """
 
-from abaqus import *
-from abaqusConstants import *
+# ============================================================================
+# 0. IMPORTS, DESIGN BASIS, WORKING FOLDER
+# ============================================================================
 
-# THESE STAR IMPORTS ARE REQUIRED FOR HEADLESS RUNS. DO NOT REMOVE.
-#
-# Abaqus attaches most Model methods lazily, when the module that defines them
-# is imported. Abaqus/CAE with its GUI loads every module at startup, so a
-# script launched through File -> Run Script finds them already present. A
-# headless run started with
-#
-#     abaqus cae noGUI=E190_MASTER_thermo_structural.py
-#
-# loads only the kernel, and any method whose module was never imported is
-# simply absent. The failure looks like a typo rather than a missing import:
-#
+# DRY RUN. With E190_DRY_RUN=1 the script resolves every input, prints them
+# with the derived quantities, and stops before building a model. The Abaqus
+# imports are then optional, so it runs in any Python 3 as well as in Abaqus
+# and a new study can be checked without a licence.
+import os as _os_dry
+DRY_RUN = _os_dry.environ.get('E190_DRY_RUN', '').strip() not in ('', '0')
+try:
+    from abaqus import *
+    from abaqusConstants import *
+except ImportError:
+    if not DRY_RUN:
+        raise
+
+# THESE STAR IMPORTS ARE REQUIRED FOR HEADLESS RUNS.
+# Abaqus attaches most Model methods only when the module that defines them is
+# imported. The CAE GUI loads every module at startup; a noGUI run loads only
+# the kernel, and a missing module shows up as, for example,
 #     AttributeError: 'Model' object has no attribute 'FieldOutputRequest'
-#
-# even though the call is correct and runs perfectly inside the GUI. Importing
-# the standard set below - the same block Abaqus itself writes at the top of
-# every .rpy replay file - makes the script behave identically either way.
-#
-# These come BEFORE the aliased imports underneath, so that abqmesh and
-# abqjob remain bound to the modules and are not shadowed.
-from part import *
-from material import *
-from section import *
-from assembly import *
-from step import *
-from interaction import *
-from load import *
-from mesh import *
-from job import *
-from sketch import *
+# The set below is the one Abaqus writes at the top of every .rpy replay file,
+# so the script behaves the same with and without the GUI. It comes before the
+# aliased imports underneath, so that abqmesh and abqjob are not shadowed.
+try:
+    from part import *
+    from material import *
+    from section import *
+    from assembly import *
+    from step import *
+    from interaction import *
+    from load import *
+    from mesh import *
+    from job import *
+    from sketch import *
+except ImportError:
+    if not DRY_RUN:
+        raise
 
-# RESTORE PYTHON'S BUILT-INS (27 Sep 2026). The star imports above bring in
-# the Abaqus XY-data operators, which replace sum() (and may replace other
-# built-ins) with versions that reject a generator: "TypeError: arg1; found
-# 'generator', expecting a recognized type". This script never uses the XY
-# operators, so the Python built-ins are put back for everything below.
+# RESTORE PYTHON'S BUILT-INS. The star imports above bring in the Abaqus
+# XY-data operators, which replace sum() (and possibly other built-ins) with
+# versions that reject a generator ("found 'generator', expecting a recognized
+# type"). The script does not use the XY operators, so the Python built-ins
+# are restored for everything below.
 import builtins as _builtins
 sum = _builtins.sum
 any = _builtins.any
@@ -244,53 +300,98 @@ min = _builtins.min
 abs = _builtins.abs
 round = _builtins.round
 
-import regionToolset
-import mesh as abqmesh
-import job as abqjob
+try:
+    import regionToolset
+    import mesh as abqmesh
+    import job as abqjob
+except ImportError:
+    if not DRY_RUN:
+        raise
 import math
 import os
 import random
 
 # ---------------------------------------------------------------------------
-# WORKING DIRECTORY
+# DESIGN BASIS
 # ---------------------------------------------------------------------------
-# This script lives in code/1_abaqus_model/ but Abaqus should write its .odb,
-# .dat, .msg and the results .csv into the working folder, so the outputs
-# never mix with the source.
+# Every design input (aircraft records, material, criteria, pressures, thermal
+# boundary conditions, load cases, fill levels, mesh and extraction rules) is
+# read from code/design_basis.json through code/design_basis.py, the same file
+# the plain-Python scripts read. To run another study, edit that file or point
+# the environment variable LH2_DESIGN_BASIS at a copy of it.
 #
-# Pinning it here means the script can be launched from anywhere - directly via
-# File -> Run Script, or through E190_CHECK_smoketest.py - and the outputs
-# always land in the same place.
-# Abaqus does NOT define __file__ when a script is launched through
-# File -> Run Script, so the automatic path resolution silently fails and the
-# outputs land in whatever directory CAE happens to be using (C:\temp by
-# default). An explicit fallback is therefore required.
-#
-# PORTABILITY. The Windows path below is only a last-resort fallback for
-# File -> Run Script on Sarvesh's laptop. It must never be the value used on
-# another machine, and in particular not on DelftBlue, where it does not
-# exist. Resolution order:
-#
-#   1. E190_WORKDIR environment variable, if set. This is what the SLURM
-#      submission script on DelftBlue uses:
-#          export E190_WORKDIR=/scratch/<netid>/e190
-#   2. The parent of the directory holding this file, when __file__ exists
-#      (true for `abaqus cae noGUI=...`, false for File -> Run Script).
-#   3. The current working directory (File -> Run Script).
-#   4. The current directory, if none of the above is a real directory. On a
-#      cluster this is the SLURM submission directory, which is correct.
+# Abaqus does not always define __file__ (not under File > Run Script, and not
+# in noGUI mode of Abaqus 2024 on Linux), so the folder code/ is searched in
+# this order, taking the first that contains design_basis.py:
+#   1. the folder above this script, from __file__
+#   2. the folder above this script, from the command line (noGUI=<path>)
+#   3. <working folder>/code (the cluster job runs from the repository root)
+#   4. the folder of the file named by LH2_DESIGN_BASIS
+# The values written further down in this file are the thesis values. They are
+# used only when none of these is found, and the script then says so.
+DB = None
+
+
+def _find_code_dir():
+    """The folder holding design_basis.py, or None."""
+    cands = []
+    try:
+        cands.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    except NameError:
+        pass
+    import sys as _sys_cd
+    for _arg in _sys_cd.argv:
+        _arg = _arg.split('=', 1)[-1]
+        if _arg.endswith('.py'):
+            cands.append(os.path.dirname(os.path.dirname(os.path.abspath(_arg))))
+    cands.append(os.path.join(os.getcwd(), 'code'))
+    _env_db = os.environ.get('LH2_DESIGN_BASIS', '').strip()
+    if _env_db:
+        cands.append(os.path.dirname(os.path.abspath(_env_db)))
+    for _c in cands:
+        if os.path.exists(os.path.join(_c, 'design_basis.py')):
+            return _c
+    return None
+
+
+_CODE_DIR = _find_code_dir()
+if _CODE_DIR:
+    import sys as _sys_db
+    if _CODE_DIR not in _sys_db.path:
+        _sys_db.path.insert(0, _CODE_DIR)
+    import design_basis as DB          # errors in a user's design basis stop the run
+    print('DESIGN BASIS: %s' % DB.PATH)
+else:
+    print('DESIGN BASIS: not found, using the thesis values written in this file')
+
+
+def _db(getter, default):
+    """Value from the design basis, or the thesis value written here."""
+    return default if DB is None else getter(DB)
+
+# ---------------------------------------------------------------------------
+# WORKING FOLDER
+# ---------------------------------------------------------------------------
+# Abaqus writes its .odb, .dat, .msg and .log files and the results .csv files
+# into the working folder, so the outputs never mix with the source code.
+#   _THESIS_DIR  where the jobs run: E190_WORKDIR if set (the cluster job
+#                sets it), otherwise the folder the script was started from
+#   _ROOT_DIR    where the results files and sized_walls.csv are kept: the
+#                folder the script was started from
+# Both are the current folder in the normal use, abaqus cae noGUI=... started
+# in an empty working folder.
 _THESIS_DIR = os.getcwd()
 _SCRIPT_DIR = None
 try:
     _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
     _THESIS_DIR = os.path.dirname(_SCRIPT_DIR)
-    # Repository layout (code/1_abaqus_model/): the analysis runs in the
-    # current working folder, which receives the .odb and results files.
+    # In the repository layout (code/1_abaqus_model/) the analysis runs in the
+    # current working folder, not next to the source.
     if os.path.basename(_SCRIPT_DIR) == '1_abaqus_model':
         _THESIS_DIR = os.getcwd()
 except NameError:
     pass
-_ROOT_DIR = _THESIS_DIR          # the thesis folder, whatever E190_WORKDIR says
+_ROOT_DIR = _THESIS_DIR          # results folder, independent of E190_WORKDIR
 import csv
 _ENV_DIR = os.environ.get('E190_WORKDIR', '').strip()
 if _ENV_DIR:
@@ -298,10 +399,7 @@ if _ENV_DIR:
         raise ValueError('E190_WORKDIR is set to a directory that does not '
                          'exist: %s' % _ENV_DIR)
     _THESIS_DIR = _ENV_DIR
-# DelftBlue (27 Sep 2026): Abaqus 2024 on Linux does not define __file__ in
-# noGUI mode, so _ROOT_DIR fell back to the Windows path, which does not exist
-# there. sized_walls.csv was then not found and the wall would silently have
-# reverted to the AIRCRAFT_DATA value. Use the working directory instead.
+# Safeguard: if the results folder does not exist, use the working folder.
 if not os.path.isdir(_ROOT_DIR):
     _ROOT_DIR = _THESIS_DIR if os.path.isdir(_THESIS_DIR) else os.getcwd()
     print('Thesis folder not found at the default path; using %s' % _ROOT_DIR)
@@ -309,7 +407,11 @@ if os.path.isdir(_THESIS_DIR):
     os.chdir(_THESIS_DIR)
 print('Working directory: %s' % os.getcwd())
 
-from odbAccess import openOdb
+try:
+    from odbAccess import openOdb
+except ImportError:
+    if not DRY_RUN:
+        raise
 
 
 # ============================================================================
@@ -317,20 +419,16 @@ from odbAccess import openOdb
 # ============================================================================
 
 # --- Run mode -------------------------------------------------------------
-# 'PRODUCTION'  : single run at the converged mesh, full load-case x fill matrix
-# 'CONVERGENCE' : mesh sensitivity study, one representative load case
+# PRODUCTION, STABILITY, CONVERGENCE, SIZING or FINAL; see the DRIVER section.
 RUN_MODE = 'PRODUCTION'
 
-# Set True to reproduce Bagarello's reference tank instead of the E190.
+# True runs the reference tank of Bagarello et al. instead of an aircraft.
 BENCHMARK_MODE = False
 
-# Both overridable from the environment, so a convergence study or a benchmark
-# run can be launched without editing this file:
-#
+# Both are set from the environment, for example (PowerShell):
 #     $env:E190_RUN_MODE = "CONVERGENCE"
 #     $env:E190_BENCHMARK = "1"
-#
-# Combine with E190_WORKDIR to keep each run's output in its own folder.
+# Combine with E190_WORKDIR to keep the output of each run in its own folder.
 _rm = os.environ.get('E190_RUN_MODE', '').strip().upper()
 if _rm:
     if _rm not in ('PRODUCTION', 'CONVERGENCE', 'SIZING', 'STABILITY', 'FINAL'):
@@ -351,51 +449,27 @@ else:
 
 
 # --- WHICH AIRCRAFT ---------------------------------------------------------
-# One physics file serves all three tanks. Only the geometry, wall thickness
-# and heat-leak budget differ; every boundary condition, load case, failure
-# criterion and post-processing step is shared.
-#
-# This matters more than it looks. Bringing the E190 model up took eight rounds
-# of debugging - a transposed axis, a missing initial temperature, a body force
-# in the wrong units, a partial constraint ring, and a pressure applied to the
-# wrong face. Keeping three separate copies would mean applying every future
-# fix three times and hoping none was missed. There is one file.
-#
-# Set AIRCRAFT here, or use the thin runner scripts that override it:
-#     run_A320.py, run_A350.py
-AIRCRAFT = 'E190'            # 'E190' | 'A320' | 'A350'
-
-# Overridable from the environment, so the three aircraft can be launched from
-# the command line without editing this file:
-#
+# One script serves every aircraft: only the geometry, the wall thickness and
+# the heat leak budget differ. The aircraft is chosen with E190_AIRCRAFT:
 #     set E190_AIRCRAFT=A320
 #     abaqus cae noGUI=code/1_abaqus_model/E190_MASTER_thermo_structural.py
-#
-# CASE_TAG follows AIRCRAFT, so each aircraft writes its own results CSV.
-#
-# WARNING - DO NOT RUN TWO AIRCRAFT AT THE SAME TIME YET. The per-case job
-# name is built from the load case and fill ratio only, not the aircraft, so
-# an A320 run would overwrite HT_Baseline_f10.odb from the E190 run while it
-# was still being read. The CSV files are safe; the .odb files are not. Fix
-# the job naming before running aircraft concurrently.
+# CASE_TAG follows AIRCRAFT, so each aircraft writes its own results files.
+# Several aircraft can run at the same time in separate working folders
+# (E190_WORKDIR), because the job names carry the aircraft (JOB NAME PREFIX).
+AIRCRAFT = 'E190'            # default; any aircraft of the design basis
 AIRCRAFT = os.environ.get('E190_AIRCRAFT', AIRCRAFT).strip() or AIRCRAFT
 
+# Aircraft records:
 # R_mid      shell mid-surface radius                                     [m]
 # L_barrel   cylindrical barrel length                                    [m]
-# cap_aspect a/b for the semi-ellipsoidal end caps                        [-]
-# t_wall     wall thickness                                               [m]
-# Q_budget   allowable heat leak, from the ~14.7 h no-vent hold           [W]
+# cap_aspect a/b of the semi-ellipsoidal end caps                         [-]
+# t_wall     starting wall of the sizing loop (closed-form sizing)        [m]
+# Q_budget   allowable heat leak, from the 14.68 h no-vent hold           [W]
 #            (boiloff_requirement_derivation.py)
-# P_gauge    internal gauge pressure                                      [Pa]
-# WALL THICKNESSES - CORRECTED 27 Sep 2026.
-# The earlier values (E190 4.785, A320 6.382, A350 9.948 mm) came from Abaqus
-# sizing runs that put the design pressure on SIDE1 of their shell surfaces,
-# the OUTER face on those meshes, so the tank was squeezed rather than
-# pressurised and the buckling screen sized against a hoop compression of
-# -pR/t that does not exist in service. See code/2_requirements_and_sizing/sizing_closed_form.py.
-# The values below are the corrected closed-form sizing (buckling at the
-# minimum pressure governs, FOS 1.50). RUN_MODE='SIZING' verifies and, if
-# needed, adjusts them with THIS model; update them here with its result.
+# P_gauge    internal gauge pressure for strength                        [Pa]
+# The wall used by every analysis after the sizing is the FE-sized wall read
+# from sized_walls.csv below. The dictionary holds the thesis values and is
+# rebuilt from the design basis whenever that is found.
 AIRCRAFT_DATA = {
     'E190': dict(R_mid=1.3015, L_barrel=13.9675, cap_aspect=1.6,
                  t_wall=0.002747, Q_budget=702.6,  P_gauge=150000.0),
@@ -404,6 +478,15 @@ AIRCRAFT_DATA = {
     'A350': dict(R_mid=2.5771, L_barrel=33.8240, cap_aspect=1.6,
                  t_wall=0.008884, Q_budget=6583.2, P_gauge=150000.0),
 }
+# From the design basis (the same values for the thesis aircraft). A new
+# aircraft is added in design_basis.json, not here.
+if DB is not None:
+    AIRCRAFT_DATA = dict(
+        (_k, dict(R_mid=DB.geometry(_k)['R'], L_barrel=DB.geometry(_k)['L'],
+                  cap_aspect=DB.geometry(_k)['cap_aspect'],
+                  t_wall=DB.record(_k)['t_wall_initial_m'], Q_budget=DB.heat_budget(_k),
+                  P_gauge=DB.P_DESIGN))
+        for _k in DB.AIRCRAFT)
 
 if not BENCHMARK_MODE:
     if AIRCRAFT not in AIRCRAFT_DATA:
@@ -417,15 +500,16 @@ if not BENCHMARK_MODE:
     Q_budget   = _ac['Q_budget']
     P_gauge    = _ac['P_gauge']
     CASE_TAG   = AIRCRAFT
-    # WALL FROM THE FE SIZING (added 27 Sep 2026). RUN_MODE SIZING / FINAL
-    # records the sized wall of each aircraft in <thesis>/sized_walls.csv.
-    # Every later run of this script, and the capture, merge and plotting
-    # scripts, take the wall from there, so the sized value flows through
-    # without anybody retyping it.
+    # WALL FROM THE FE SIZING. RUN_MODE SIZING or FINAL records the sized wall
+    # of each aircraft in sized_walls.csv. Every later run of this script, and
+    # the capture, merge and plotting scripts, take the wall from there, so the
+    # sized value is never retyped. The file is looked for in the results
+    # folder, then in results/ of the repository.
     SIZED_WALLS = os.path.join(_ROOT_DIR, 'sized_walls.csv')
-    # Repository layout: fall back to results/sized_walls.csv of the repository.
-    if not os.path.exists(SIZED_WALLS) and _SCRIPT_DIR:
-        _repo_sw = os.path.join(os.path.dirname(os.path.dirname(_SCRIPT_DIR)), 'results', 'sized_walls.csv')
+    if not os.path.exists(SIZED_WALLS) and (_SCRIPT_DIR or _CODE_DIR):
+        _repo_sw = os.path.join(os.path.dirname(_CODE_DIR) if _CODE_DIR else
+                                os.path.dirname(os.path.dirname(_SCRIPT_DIR)),
+                                'results', 'sized_walls.csv')
         if os.path.exists(_repo_sw):
             SIZED_WALLS = _repo_sw
     if os.path.exists(SIZED_WALLS):
@@ -433,8 +517,7 @@ if not BENCHMARK_MODE:
             if _row.get('aircraft') == AIRCRAFT:
                 t_wall = float(_row['t_wall_mm']) / 1000.0
                 print('WALL FROM FE SIZING (sized_walls.csv): %.3f mm' % (t_wall * 1e3))
-    # Overrides from the environment, so a trial wall or a different pressure
-    # can be run without editing this file:
+    # Overrides from the environment, for a trial wall or another pressure:
     #     set E190_T_WALL=2.75        (mm)
     #     set E190_P_GAUGE=0.18675    (bar gauge)
     _tw = os.environ.get('E190_T_WALL', '').strip()
@@ -447,7 +530,7 @@ if not BENCHMARK_MODE:
         print('PRESSURE OVERRIDE: %.5f bar gauge' % (P_gauge / 1.0e5))
 else:
     # ----------------------------------------------------------------
-    # BAGARELLO REFERENCE TANK - their Table 4, read from the paper.
+    # BAGARELLO REFERENCE TANK, their Table 4:
     #
     #     storage volume        V        100 m3
     #     cylinder length       L        4.24 m
@@ -457,15 +540,10 @@ else:
     #     outer layer           t_CFRP   10 mm
     #     filling ratio         phi_f    0.75
     #
-    # CORRECTED 19 September. t_wall was previously set to 0.001 m with the
-    # comment "their t_Al = 1 mm". Their Table 4 states 10 mm. The tenfold
-    # error put the liner hoop stress at pR/t = 360 MPa instead of 36 MPa and
-    # made the benchmark's structural output meaningless.
-    #
-    # THEY MODEL THREE SOLID LAYERS; THIS MODEL HAS ONE SHELL. Only the
-    # aluminium liner is represented here. The foam and composite enter
-    # through the outer heat flux, computed from their stated boundary
-    # conditions below - not fitted to their answer.
+    # They model three solid layers; this model has one shell, the aluminium
+    # liner. The foam and the composite enter through the outer heat flux,
+    # computed from their stated boundary conditions (below), not fitted to
+    # their result.
     # ----------------------------------------------------------------
     R_mid      = 2.12        # m,  their Table 4
     L_barrel   = 4.24        # m,  their Table 4
@@ -477,45 +555,36 @@ else:
 
 
 # --- JOB NAME PREFIX -------------------------------------------------------
-# Abaqus job names are built from the load case and fill ratio alone, which
-# means an A320 run would write HT_Baseline_f10.odb on top of the E190 file of
-# the same name. The CSV files were always safe - CASE_TAG is in their names -
-# but the .odb files were not.
-#
-# E190 KEEPS ITS BARE NAMES. The E190 matrix of 19 September is already on
-# disk as HT_Baseline_f10.odb and so on, and renaming it would invalidate
-# every reference to those files. Only the other cases take a prefix:
+# Job names carry the aircraft, so that the output databases of different
+# aircraft never overwrite one another. The E190 keeps bare names, which the
+# capture and post-processing scripts of the thesis refer to:
 #
 #     E190        HT_Baseline_f10.odb
 #     A320        HT_A320_Baseline_f10.odb
 #     A350        HT_A350_Baseline_f10.odb
 #     benchmark   HT_BAGARELLO_Baseline_f10.odb
-#
-# Combined with a separate output directory per aircraft (E190_WORKDIR), the
-# three runs cannot touch one another's results.
 TAG_PREFIX = '' if CASE_TAG == 'E190' else (CASE_TAG + '_')
 
 
 # --- Material: Al 2219-T87 ------------------------------------------------
-# Yield is taken at ROOM temperature rather than the higher cryogenic value.
-# This is deliberate and conservative: not every point of the wall reaches
-# 20 K. Note that Bagarello use 500 MPa (the cryogenic value) with the same
-# safety factor, giving 333 MPa allowable against our 262 MPa.
-E_mod     = 73.1e9       # Pa
-nu        = 0.33         # -
-rho_shell = 2850.0       # kg/m3
-alpha     = 22.3e-6      # 1/K
-k_shell   = 116.0        # W/m-K
-cp_shell  = 864.0        # J/kg-K
-Fty_RT    = 393e6        # Pa, room-temperature yield
-SF        = 1.5          # CS-25.303
+# Yield is taken at ROOM temperature rather than the higher cryogenic value,
+# which is conservative. Bagarello et al. use 500 MPa (cryogenic) with the
+# same margin, an allowable of 333 MPa against 262 MPa here.
+E_mod     = _db(lambda d: d.MAT['E_Pa'], 73.1e9)            # Pa
+nu        = _db(lambda d: d.MAT['nu'], 0.33)                # -
+rho_shell = _db(lambda d: d.MAT['rho_kg_m3'], 2850.0)       # kg/m3
+alpha     = _db(lambda d: d.MAT['alpha_per_K'], 22.3e-6)    # 1/K
+k_shell   = _db(lambda d: d.MAT['k_W_per_mK'], 116.0)       # W/m-K
+cp_shell  = _db(lambda d: d.MAT['cp_J_per_kgK'], 864.0)     # J/kg-K
+Fty_RT    = _db(lambda d: d.MAT['Fty_Pa'], 393e6)           # Pa, room-temperature yield
+SF        = _db(lambda d: d.CRIT['yield_margin'], 1.5)      # project design margin, NOT the CS-25 factor of safety (thesis 3.6)
 sigma_allow = Fty_RT / SF                                   # FORMULA 10
 
-# Property overrides for the cryogenic-property check (added 28 Sep 2026).
-# alpha and k_shell above are ROOM-TEMPERATURE values, as in the benchmark
-# (Bagarello Table 1). Near 20 K the secant expansion coefficient of
-# aluminium is roughly 20 to 30 times smaller (NIST, 6061-T6). The check
-# brackets the effect without changing any default:
+# Property overrides for the cryogenic-property check. alpha and k_shell
+# above are ROOM-TEMPERATURE values, as in the benchmark (Bagarello Table 1).
+# Near 20 K the secant expansion coefficient of aluminium is roughly 20 to 30
+# times smaller (NIST, 6061-T6). The check brackets the effect without
+# changing any default:
 #     set E190_ALPHA=0          thermal strain switched off
 #     set E190_KAPPA=21.7       conductivity scaled to 20 K (optional)
 _al = os.environ.get('E190_ALPHA', '').strip()
@@ -527,7 +596,7 @@ if _ka:
     k_shell = float(_ka)
     print('CONDUCTIVITY OVERRIDE: k = %.2f W/m-K' % k_shell)
 
-# --- Stability (added 27 Sep 2026) -----------------------------------------
+# --- Stability -------------------------------------------------------------
 # Axial buckling allowable of the barrel, NASA SP-8007 (1968), unpressurised
 # knockdown. Pressure stabilisation is not credited.
 #   sigma_cl = E t / (R sqrt(3(1-nu^2))),  phi = sqrt(R/t)/16,
@@ -540,39 +609,41 @@ def sigma_cr_sp8007(R, t):
 # Design basis (Chapter 3): STABILITY at the minimum differential the tank can
 # hold when the load occurs, 1.2 bar abs (Winnefeld after Verstraete) against
 # ISA sea-level 1.01325 bar; STRENGTH at the maximum design differential.
-P_STABILITY = 120000.0 - 101325.0     # Pa gauge = 0.18675 bar
-FOS_BUCKLING = 1.5
-# Optional minimum wall. OFF by default: the agreed basis is buckling + yield
-# only. To apply the ASME BPVC VIII-1 UG-16(b) floor of 1/16 in. (1.5 mm):
-#     set E190_MIN_GAUGE_MM=1.5
-MIN_GAUGE = float(os.environ.get('E190_MIN_GAUGE_MM', '0')) / 1000.0
+P_STABILITY = _db(lambda d: d.P_STABILITY, 120000.0 - 101325.0)   # Pa gauge = 0.18675 bar
+FOS_BUCKLING = _db(lambda d: d.CRIT['buckling_margin'], 1.5)
+# Optional minimum wall, off by default (the thesis sizes against buckling and
+# yield only). To apply the ASME BPVC VIII-1 UG-16(b) floor of 1/16 in.:
+#     set E190_MIN_GAUGE_MM=1.59
+MIN_GAUGE = float(os.environ.get('E190_MIN_GAUGE_MM', '%r' % (1000.0 * _db(lambda d: d.CRIT['min_gauge_m'], 0.0)))) / 1000.0
 
 # --- Fluid -----------------------------------------------------------------
-rho_LH2 = 70.8           # kg/m3
-T_LH2   = 20.3           # K, Bagarello Sec. 3.1
-T_GH2   = 20.3           # K, ullage gas bulk temperature
+rho_LH2 = _db(lambda d: d.MISSION['rho_lh2_kg_m3'], 70.8)     # kg/m3
+T_LH2   = _db(lambda d: d.TH['T_liquid_K'], 20.3)            # K, Bagarello Sec. 3.1
+T_GH2   = _db(lambda d: d.TH['T_ullage_K'], 20.3)            # K, ullage gas bulk temperature
 # --- STRESS-FREE REFERENCE TEMPERATURE -------------------------------------
 # THIS IS A MODELLING DECISION WITH A LARGE CONSEQUENCE. READ BEFORE CHANGING.
 #
 # Set to 20.3 K, matching Bagarello et al. Table 1, which lists a reference
 # temperature of 20 K for the aluminium. The vessel is therefore defined as
 # stress-free in its COLD OPERATING STATE, and the only thermal load the
-# structure sees is the wetted-to-dry gradient of roughly 2.6 to 3.9 K.
+# structure sees is the wetted-to-dry temperature difference, 3.4 to 7.4 K
+# for the sized E190, A320 and A350-900 walls.
 #
 # WHY NOT 293 K, THE ASSEMBLY TEMPERATURE
 # ---------------------------------------
-# Using 293 K applies the full 273 K cooldown on top of every load case. That
-# was tried and produced 649.5 MPa, which is 98 percent of the biaxial fully
-# restrained value E*alpha*dT/(1-nu) = 663 MPa, against a 262 MPa allowable.
-# The ring constraints lock the vessel diameter, so the 7.9 mm of radial
-# contraction the tank wants is resisted entirely by the metal.
+# Using 293 K applies the full 273 K cooldown on top of every load case. For
+# the E190 the model then gives 649.5 MPa, 98 percent of the biaxial fully
+# restrained value E*alpha*dT/(1-nu) = 663 MPa, against a 262 MPa allowable:
+# the rings lock the vessel diameter, so the radial contraction the tank wants
+# is resisted entirely by the metal. E190, reference 293 K against 20.3 K
+# (largest wetted-to-dry difference 3.68 K):
 #
-#   excursion from stress-free : 272.7 K        ->  2.58 K
-#   radial contraction wanted  :   7.9 mm       ->  0.075 mm
-#   axial contraction wanted   :  47.4 mm       ->  0.449 mm
-#   stress if fully blocked    : 663 MPa        ->  6.3 MPa
+#   excursion from stress-free : 272.7 K        ->  3.68 K
+#   radial contraction wanted  :   7.9 mm       ->  0.11 mm
+#   axial contraction wanted   :  47.4 mm       ->  0.64 mm   (towards mid-barrel)
+#   stress if fully blocked    : 663 MPa        ->  9.0 MPa
 #
-# A factor of 106 less for the supports to resist.
+# A factor of 74 less for the supports to resist.
 #
 # THE PHYSICAL ARGUMENT
 # ---------------------
@@ -585,13 +656,13 @@ T_GH2   = 20.3           # K, ullage gas bulk temperature
 #
 # WHAT THIS EXCLUDES
 # ------------------
-# The cooldown itself is no longer covered. It belongs in its own analysis:
+# The cooldown itself is not covered here. It belongs in its own analysis:
 # a ground condition at 1 g with no crash factors, where the question is
 # whether the supports can accommodate 47 mm of contraction. Biancotto
 # Sec. 5.8.1 addresses precisely this and finds that supports resisting the
 # inner vessel's thermal displacement are overstressed by 1.6 to 3.8 times.
 # Recorded as further work rather than silently omitted.
-T_ref   = 20.3           # K, stress-free reference (cold operating state)
+T_ref   = _db(lambda d: d.TH['T_reference_K'], 20.3)         # K, stress-free reference (cold operating state)
 T_ASSEMBLY = 293.0       # K, retained for the cooldown case, not used here
 g       = 9.81           # m/s2
 
@@ -600,12 +671,12 @@ g       = 9.81           # m/s2
 # coefficient is high, so the wall is effectively pinned at the fuel
 # temperature. Bagarello justify this by "the high thermal conductivity of the
 # aluminium alloy and the great transfer at the fluid-structure interface".
-h_wetted = 1000.0        # W/m2-K, effectively pins the wall to T_LH2
+h_wetted = _db(lambda d: d.TH['h_wetted_W_per_m2K'], 1000.0)   # W/m2-K, effectively pins the wall to T_LH2
 
 # Inner surface, DRY region: hydrogen vapour by natural convection.
 # THIS IS THE KEY NUMBER. It is far smaller than h_wetted, which is why the
 # dry wall runs warmer and a gradient forms.
-h_dry    = 1.46          # W/m2-K, Bagarello Sec. 3.1, their ref [45]
+h_dry    = _db(lambda d: d.TH['h_dry_W_per_m2K'], 1.46)       # W/m2-K, Bagarello Sec. 3.1, their ref [45]
 
 # Outer surface: heat arriving through the MLI blanket, applied as a uniform
 # inward flux. The inner vessel is the only body modelled, so the insulation
@@ -615,11 +686,7 @@ if not BENCHMARK_MODE:
 else:
     MLI_FLUX_MODE = 'EXPLICIT'
     # ----------------------------------------------------------------
-    # BENCHMARK OUTER FLUX - DERIVED FROM THEIR INPUTS, NOT THEIR ANSWER.
-    #
-    # The previous value of 22.0 W/m2 was a placeholder annotated
-    # "representative of 0.5 m PUR foam". It was not Bagarello's number, and
-    # it drove the dry wall to 35.4 K against their reported 25.3 K.
+    # BENCHMARK OUTER FLUX, DERIVED FROM THEIR INPUTS, NOT THEIR RESULT.
     #
     # Their Sec. 3.1 states the external boundary condition explicitly:
     #
@@ -651,50 +718,43 @@ else:
 
 
 # --- CS-25 load cases ------------------------------------------------------
-# Sign convention: +x forward, +y lateral, +z up.
-#   Baseline  : 1 g, level flight
-#   LC1       : CS-25.337 symmetric manoeuvre
-#   LC3       : constructed combined case (see thesis Methodology)
-#   LC7       : CS-25.561 emergency landing, three largest factors applied
-#               simultaneously. This is more severe than the regulation, which
-#               specifies the factors acting separately.
+# Load factors (nx forward, ny lateral, nz vertical) in g; see CONVENTIONS in
+# the header for the mapping to the model axes. Codes and names:
+#   Baseline       Baseline condition: 1 g, ground or level flight
+#   LC1_Maneuver   Symmetric manoeuvre: CS 25.337 limit factor
+#   LC3_Combined   Combined manoeuvre: constructed case, not from CS-25
+#   LC7_Emergency  Emergency landing: CS 25.561 factors applied together,
+#                  which is more severe than the regulation, where they act
+#                  separately
 load_cases = {
     'Baseline':      {'nx': 0.0, 'ny': 0.0, 'nz': 1.0},
     'LC1_Maneuver':  {'nx': 0.0, 'ny': 0.0, 'nz': 2.5},
     'LC3_Combined':  {'nx': 1.5, 'ny': 0.0, 'nz': 2.5},
     'LC7_Emergency': {'nx': 9.0, 'ny': 3.0, 'nz': 6.0},
 }
+if DB is not None:
+    load_cases = dict((_k, {'nx': DB.LOAD_CASES[_k][0], 'ny': DB.LOAD_CASES[_k][1],
+                            'nz': DB.LOAD_CASES[_k][2]}) for _k in DB.LOAD_CASE_ORDER)
+# The case that sizes the wall and is used for the mesh study (thesis 3.6, 4.9).
+GOVERNING_CASE = _db(lambda d: d.ANALYSIS['governing_case'], 'LC7_Emergency')
+GOVERNING_FILL = _db(lambda d: d.ANALYSIS['governing_fill'], 0.9)
+ALL_LOAD_CASES = dict(load_cases)       # before any E190_ONLY_LC filter
+GOVERNING_FACTORS = ALL_LOAD_CASES[GOVERNING_CASE]
 
 # ----------------------------------------------------------------------------
-# OPTIONAL LOAD-CASE FILTER - FOR RUNNING THE MATRIX IN PARALLEL SESSIONS
+# OPTIONAL LOAD-CASE FILTER, FOR RUNNING THE MATRIX IN PARALLEL SESSIONS
 # ----------------------------------------------------------------------------
-# WHY THIS EXISTS
-# ---------------
-# Measured on the 18 September production run: 32 solver jobs consumed 259
-# seconds of actual computation in 79 minutes of wall clock. Ninety-five per
-# cent of the run was spent queueing for an Abaqus/Standard licence token,
-# with the campus pool reporting
+# E190_ONLY_LC restricts a session to a subset of the load cases, so the
+# matrix can be split across several Abaqus sessions running at the same time.
+# On a shared licence pool most of the wall-clock time is spent waiting for a
+# solver token, and several sessions hold several places in that queue.
 #
-#     <0 out of 500 licenses remain available>
+# The analysis does not change: every design point is built from scratch,
+# meshed at the same seed and solved with the same loads under its own job
+# name. The design points are independent, so splitting them across sessions
+# cannot alter any number.
 #
-# The script submits one job at a time and waits. With one request
-# outstanding, it sits at the back of a shared queue forty times over.
-#
-# WHAT THIS CHANGES, AND WHAT IT DOES NOT
-# ---------------------------------------
-# Setting E190_ONLY_LC restricts this session to a subset of the load cases,
-# so the matrix can be split across several Abaqus sessions running at the
-# same time. Four sessions hold four queue positions instead of one, and are
-# served roughly four times as often.
-#
-# NOTHING ABOUT THE ANALYSIS CHANGES. Each case is still built from scratch,
-# meshed at the same seed, solved by the same solver with the same loads, and
-# written to its own job name. The cases are independent of one another and
-# always were - running them in four sessions rather than one cannot alter a
-# single number. Only the order in which they reach the licence server
-# differs.
-#
-# HOW TO USE - four Command Prompt windows, one line each:
+# Use, one Command Prompt window per load case:
 #
 #     set E190_ONLY_LC=Baseline
 #     abaqus cae noGUI=code/1_abaqus_model/E190_MASTER_thermo_structural.py
@@ -705,9 +765,9 @@ load_cases = {
 #     E190_production_Baseline_results.csv
 #     E190_production_LC1_Maneuver_results.csv       ... and so on
 #
-# Concatenate the four afterwards to obtain the full twenty-row matrix. Each
-# session also checks out one cae licence, so keep the number of sessions
-# below the number of free cae seats.
+# In a FINAL run the sessions resume from one another's files; in a
+# PRODUCTION run, concatenate the files afterwards. Each session also checks
+# out one CAE licence, so keep the number of sessions below the free seats.
 _only_lc = os.environ.get('E190_ONLY_LC', '').strip()
 LC_FILTER = ''
 if _only_lc:
@@ -726,7 +786,7 @@ if _only_lc:
 
 # --- Fill ratios -----------------------------------------------------------
 # Independent static design points, NOT a mission timeline.
-fill_ratios = [0.1, 0.3, 0.5, 0.75, 0.9]
+fill_ratios = _db(lambda d: list(d.FILLS), [0.1, 0.3, 0.5, 0.75, 0.9])
 
 # OPTIONAL FILL FILTER - the second axis for splitting the matrix.
 # Same purpose and same guarantees as E190_ONLY_LC above: it selects which
@@ -765,48 +825,40 @@ if _only_fill:
     print('FILL RATIO FILTER ACTIVE: %s' % fill_ratios)
 
 # --- Mesh ------------------------------------------------------------------
-# The shell bending boundary layer at a cap-to-barrel junction has a
-# characteristic length of sqrt(R*t). For the E190 that is 78.9 mm. The
-# element size must resolve it, which the previous model's 341 mm elements did
-# not. seed_size below is chosen as a fraction of that length.
+# The shell bending boundary layer at a ring or a cap-to-barrel junction has a
+# characteristic length of sqrt(R*t): 41.0, 51.8 and 120.9 mm for the sized
+# E190, A320 and A350-900 walls. The element size must resolve it, so
+# seed_size below is a fraction of that length (thesis Equation 4.8).
 MESHED_MASS = 0.0        # filled in by build_geometry_and_mesh, kg
 
 # Axial half-width of the zone excluded around each ring when reporting peak
-# stress. 0.5 m is 6.3 shell decay lengths sqrt(R*t) for the E190. See the
-# FAR-FIELD block in extract() for the full justification.
-FAR_FIELD_EXCLUSION = 0.5   # m
+# stress. For the sized walls the decay length pi/beta is 0.10, 0.13 and
+# 0.30 m, so 0.5 m spans 5.0, 3.9 and 1.7 decay lengths (thesis Section 4.7).
+# See the FAR-FIELD block in extract() for the full justification.
+FAR_FIELD_EXCLUSION = _db(lambda d: d.ANALYSIS['far_field_exclusion_m'], 0.5)   # m
 
 boundary_layer = math.sqrt(R_mid * t_wall)
 #
 # MESH_FRACTION IS SET FROM THE CONVERGENCE STUDY, NOT ASSUMED.
-# Running E190_CHECK_smoketest.py with MODE = 'CONVERGENCE' gave, for LC7 at
-# fill 0.9:
-#
-#     el/BL   elements   peak vM      change    deviation from finest
-#      0.5       5,263   65.85 MPa        -            -3.09 %
-#      1.0      18,989   67.73 MPa    +2.86 %          -0.33 %
-#      2.0      64,372   68.03 MPa    +0.44 %          +0.11 %
-#      4.0     259,944   67.96 MPa    -0.11 %           0.00 %
-#
-# 0.5 is adopted: two elements across the bending boundary layer, within
-# 0.11 % of the finest mesh at a quarter of the element count.
-MESH_FRACTION = 0.5                       # elements per boundary layer = 2
+# The governing case was solved with 1, 2 and 4 elements per bending length
+# (fractions 1, 0.5 and 0.25). At 0.5 the far-field von Mises stress lies
+# within 1 % of the finest mesh for all three tanks; the coarsest mesh
+# overestimates it by 5 to 11 % (thesis Section 4.9, Table 4.5).
+MESH_FRACTION = _db(lambda d: d.ANALYSIS['mesh_fraction_of_sqrt_Rt'], 0.5)   # elements per boundary layer = 2
 seed_size = boundary_layer * MESH_FRACTION
 
-# Densities swept when RUN_MODE = 'CONVERGENCE'.
-convergence_fractions = [1.0, 0.5, 0.25]
-# 27 Sep 2026: 1, 2 and 4 elements per boundary layer. At the re-sized walls
-# the boundary layer sqrt(R t) is short, and the old finest level (8 per layer)
-# would be 2 to 4 million elements. The earlier studies at the thicker walls
-# covered 0.5 to 8 elements per layer.
-# Optional: drop levels from the environment, e.g.  set E190_CONV_FRACTIONS=2,1,0.5,0.25
-# (a thinner wall shortens sqrt(R t), so the finest level grows as 1/t).
+# Densities swept by the convergence study: 1, 2 and 4 elements per boundary
+# layer. A finer level (8 per layer) would be 2 to 4 million elements at the
+# sized walls, because a thin wall shortens sqrt(R t) and the element count
+# grows as 1/t. Other levels from the environment, for example
+#     set E190_CONV_FRACTIONS=2,1,0.5,0.25
+convergence_fractions = _db(lambda d: list(d.ANALYSIS['convergence_fractions']), [1.0, 0.5, 0.25])
 _cf = os.environ.get('E190_CONV_FRACTIONS', '').strip()
 if _cf:
     convergence_fractions = [float(x) for x in _cf.split(',') if x.strip()]
     print('CONVERGENCE LEVELS OVERRIDE: %s' % convergence_fractions)
 
-n_bins = 64   # circumferential/height bins for the hydrostatic pressure field
+n_bins = _db(lambda d: d.ANALYSIS['hydrostatic_bins'], 64)   # depth bins for the hydrostatic pressure field
 
 
 # ============================================================================
@@ -826,19 +878,13 @@ A_barrel = 2.0 * math.pi * R_mid * L_barrel
 #
 #     A = 2*pi*R^2 * [ 1 + ((1-e^2)/e) * artanh(e) ],   e = sqrt(1 - (h/R)^2)
 #
-# The obvious approximation 2*pi*R*h_cap understates this by 59 percent, which
-# made the whole shell area 7.9 percent low. That error showed up as a
-# systematic 1.079 ratio in the X and Z components of the load balance check
-# in every single production case - the model was correct, the reference value
-# was not.
+# The approximation 2*pi*R*h_cap for the two caps together understates their
+# area by 59 percent for the E190, and the shell area by about 8 percent,
+# which would appear as an equal imbalance in the load balance check.
 #
-# SPHERICAL CAPS ARE A SPECIAL CASE AND MUST BE HANDLED SEPARATELY.
-# When cap_aspect = 1.0 the caps are hemispheres, h_cap = R_mid, and the
-# eccentricity is exactly zero. The oblate-spheroid formula then divides by
-# e = 0. This is not hypothetical: the Bagarello benchmark tank uses
-# spherical caps, so BENCHMARK_MODE = True hits it on the first run.
-# The limit of the formula as e -> 0 is the sphere, A = 4*pi*R^2, which is
-# what is used below.
+# SPHERICAL CAPS (cap_aspect = 1, the benchmark tank) are a special case: the
+# eccentricity is zero and the formula divides by e = 0. Its limit as e -> 0,
+# the sphere A = 4*pi*R^2, is used instead.
 _e2 = 1.0 - (h_cap / R_mid) ** 2
 if _e2 <= 1e-12:
     # hemispherical caps: the two together form a complete sphere
@@ -856,7 +902,7 @@ else:
     q_outer = q_outer_explicit
 
 print('=' * 78)
-print('E190 INNER VESSEL - THERMO-STRUCTURAL ANALYSIS (Bagarello methodology)')
+print('LH2 INNER VESSEL - THERMO-STRUCTURAL ANALYSIS (Bagarello methodology)')
 print('=' * 78)
 print('Case                 : %s' % CASE_TAG)
 print('Run mode             : %s' % RUN_MODE)
@@ -883,27 +929,22 @@ print('=' * 78)
 # TILTED FREE SURFACE
 # ----------------------------------------------------------------------------
 # A liquid under steady acceleration reaches relative equilibrium: it behaves
-# exactly as under gravity, except that "down" is the direction of the applied
-# inertial body force rather than the vertical.
+# exactly as under gravity, except that "down" is the direction of the
+# resultant load factor rather than the vertical. The free surface is the
+# plane normal to that direction which leaves the fill fraction of the tank
+# volume below it, and the depth is measured along that direction.
 #
-# The earlier version measured depth VERTICALLY while scaling the pressure by
-# the magnitude of the resultant load factor. That is exact for Baseline and
-# LC1, whose load factors are purely vertical, but wrong for LC3 and LC7. The
-# standalone check in check_tilted_free_surface.py quantified the error:
+# For the E190 at a fill level of 0.90 the maximum depth of liquid is
 #
-#     load case   tilt      depth now    depth correct    p_hyd ratio
-#     Baseline     0.0 deg    2.188 m       2.188 m          x1.00
-#     LC1          0.0 deg    2.188 m       2.188 m          x1.00
-#     LC3         31.0 deg    2.188 m       7.903 m          x3.6
-#     LC7         57.7 deg    2.188 m      11.441 m          x5.2
+#     load case             tilt from vertical   maximum depth
+#     Baseline condition         0.0 deg            2.19 m
+#     Symmetric manoeuvre        0.0 deg            2.19 m
+#     Combined manoeuvre        31.0 deg            7.91 m
+#     Emergency landing         57.7 deg           11.45 m
 #
-# The tank is 15.6 m long and 2.6 m tall, so tilting the effective gravity
-# toward the axis makes the liquid column far deeper than the tank is tall.
-# At f = 0.90 the LC7 hoop stress at the deepest point rises 43 percent.
-#
-# Baseline and LC1 return a ratio of exactly 1.00, so this is a strict
-# GENERALISATION of the previous treatment, not a replacement: those two load
-# cases are unaffected.
+# The tank is 15.6 m long and 2.6 m tall, so a load factor tilted toward the
+# axis makes the liquid column much deeper than the tank is tall. For a purely
+# vertical load factor the treatment reduces to the horizontal free surface.
 
 _VOL_PTS = None          # volume sample points, built once and reused
 
@@ -946,9 +987,10 @@ def effective_down(nx, ny, nz):
     Unit vector in the direction the liquid settles, in global (X, Y, Z) =
     (forward, up, lateral).
 
-    Taken directly from the body force the model applies - comp1 = -nx*g,
-    comp2 = -nz*g, comp3 = -ny*g - so the liquid settles in the same direction
-    the structure is pushed, which is what relative equilibrium requires.
+    Taken from the body force the model applies (comp1 = +nx*g,
+    comp2 = -nz*g, comp3 = -ny*g, see run_case), so the liquid settles in the
+    direction in which the structure is loaded, as relative equilibrium
+    requires.
     """
     v = (nx, -nz, -ny)
     mag = math.sqrt(v[0] ** 2 + v[1] ** 2 + v[2] ** 2)
@@ -996,8 +1038,10 @@ def elem_depth_coord(el, g_hat):
 
 def fill_surface_height(phi_f):
     """
-    FORMULA 3. Height of the horizontal liquid free surface, measured from the
-    tank axis, for a given fill ratio.
+    ALTERNATIVE MODEL, KEPT FOR VERIFICATION AND FUTURE STUDIES (not called).
+
+    FORMULA 3, horizontal special case. Height of a horizontal liquid free
+    surface, measured from the tank axis, for a given fill ratio.
 
     For a horizontal cylinder the submerged area is a circular segment, and
     the fill ratio relates to the segment half-angle theta through
@@ -1007,17 +1051,15 @@ def fill_surface_height(phi_f):
     which has no closed-form inverse, so Newton's method is used. The result
     is converted back to a height by y = -R*cos(theta/2).
 
-    NO LONGER CALLED. RETAINED FOR THE ANALYTICAL CROSS-CHECK ONLY.
-    ---------------------------------------------------------------
-    This assumes the free surface is HORIZONTAL, i.e. that the acceleration
-    acts vertically. That is true for Baseline and LC1 and false for LC3 and
-    LC7. It was used by the thermal wetted/dry split until the split was moved
-    onto the tilted surface; using it anywhere in the load path again would
-    reintroduce a thermal model that ignores the load case.
+    It assumes a HORIZONTAL free surface, i.e. a vertical load factor, which
+    holds for the Baseline condition and the symmetric manoeuvre but not for
+    the combined manoeuvre or the emergency landing. It also treats the tank
+    as a cylinder without caps. Using it in the load path would make the
+    thermal model ignore the load case.
 
-    It remains useful as a verification: for a purely vertical load factor,
+    Use as a verification: for a purely vertical load factor,
     free_surface_offset() must reproduce -fill_surface_height(phi_f) to within
-    the sampling error of the point cloud.
+    the sampling error of the point cloud and the effect of the caps.
     """
     if phi_f <= 0.0:
         return -R_mid
@@ -1038,7 +1080,10 @@ def fill_surface_height(phi_f):
 
 def elem_centroid_z(el):
     """
-    Vertical coordinate of an element centroid.
+    ALTERNATIVE MODEL, KEPT FOR VERIFICATION AND FUTURE STUDIES (not called).
+
+    Vertical coordinate of an element centroid, the companion of
+    fill_surface_height for a horizontal free surface.
 
     NOTE ON THE ABAQUS API: MeshElement.connectivity returns node INDICES into
     the instance's node array, not node LABELS. Indexing a label-keyed
@@ -1060,13 +1105,9 @@ def elem_centroid_z(el):
     cross-section in the GLOBAL Y-Z plane. The tank spans x = -h_cap at the
     AFT pole to x = L_barrel + h_cap at the FORWARD pole.
 
-    Vertical is therefore Y, which is coordinates[1].
-
-    An earlier version used coordinates[2] (Z, the horizontal direction across
-    the tank). The symptom was a von Mises field that was symmetric top to
-    bottom with a longitudinal band down the middle, instead of increasing
-    steadily from the crown to the keel. In effect the tank was being filled
-    sideways.
+    Vertical is therefore Y, which is coordinates[1]. (Using coordinates[2]
+    would fill the tank sideways: a von Mises field symmetric top to bottom
+    instead of rising from the crown to the keel.)
     """
     nds = el.getNodes()
     tot = 0.0
@@ -1083,10 +1124,14 @@ def build_geometry_and_mesh(model_name, seed, analysis_type='STRUCTURAL'):
     elements for the heat transfer step, 'STRUCTURAL' gives stress elements
     for the static step.
 
-    Shell elements are used rather than solids. The wall is 4.785 mm on a
-    1.3015 m radius (R/t = 272), which is firmly in the thin-shell regime, and
+    Shell elements are used rather than solids. The sized walls have R/t of
+    about 450 (A350-900) to 1100 (A320), firmly in the thin-shell regime, and
     with k = 116 W/m-K the through-thickness temperature drop is negligible,
     so a shell conduction model is adequate.
+
+    Geometry: the meridian (aft cap, barrel, forward cap) is sketched in the
+    X-r plane and revolved 360 degrees about X. The caps are exact quarter
+    ellipses with semi-axes h_cap (axial) and R_mid (radial).
     """
     model = mdb.Model(name=model_name)
 
@@ -1094,8 +1139,9 @@ def build_geometry_and_mesh(model_name, seed, analysis_type='STRUCTURAL'):
     s = model.ConstrainedSketch(name='meridian', sheetSize=4.0 * L_total)
     s.ConstructionLine(point1=(0.0, 0.0), point2=(1.0, 0.0))
 
-    # Forward cap: quarter ellipse from the pole to the barrel start.
-    # Parametrised so the profile is exact rather than a spline fit.
+    # Aft cap: quarter ellipse from the aft pole (x = -h_cap) to the start of
+    # the barrel (x = 0). Parametrised, so the profile is exact rather than a
+    # spline fit.
     n_cap_pts = 40
     pts = []
     for i in range(n_cap_pts + 1):
@@ -1109,7 +1155,8 @@ def build_geometry_and_mesh(model_name, seed, analysis_type='STRUCTURAL'):
     # Barrel
     s.Line(point1=(0.0, R_mid), point2=(L_barrel, R_mid))
 
-    # Aft cap, mirror of the forward one
+    # Forward cap, mirror of the aft one, from x = L_barrel to the forward
+    # pole at x = L_barrel + h_cap
     pts2 = []
     for i in range(n_cap_pts + 1):
         ang = (math.pi / 2.0) * i / float(n_cap_pts)
@@ -1135,8 +1182,8 @@ def build_geometry_and_mesh(model_name, seed, analysis_type='STRUCTURAL'):
     # NOTE ON THE KEYWORD: the argument that controls how temperature varies
     # through the shell thickness is called `temperature`, NOT
     # `temperatureType`. GRADIENT stores a mid-surface value plus a
-    # through-thickness gradient, which is what a predefined temperature field
-    # read from a heat transfer .odb supplies.
+    # through-thickness gradient. The applied temperature fields set the
+    # gradient to zero explicitly (CONSTANT_THROUGH_THICKNESS in run_case).
     model.HomogeneousShellSection(name='Wall', material='Al2219T87',
                                   thickness=t_wall,
                                   temperature=GRADIENT)
@@ -1153,10 +1200,11 @@ def build_geometry_and_mesh(model_name, seed, analysis_type='STRUCTURAL'):
     # surface has consistent element normals by construction. The free
     # quad-dominated fallback does not guarantee that, and inconsistent
     # normals would make "side1" point outward on some elements and inward on
-    # others. Since the gauge pressure alone is 150 kPa over a 5.32 m2 cross
-    # section, i.e. 798 kN, even a few percent of flipped elements produces
-    # hundreds of kN of spurious resultant on what should be a
-    # self-equilibrating load. The technique used is therefore reported.
+    # others. The gauge pressure of 150 kPa acts on a 5.32 m2 cross section of
+    # the E190 (798 kN), so a few percent of flipped elements would produce
+    # hundreds of kN of spurious resultant on a self-equilibrating load. The
+    # technique used is therefore reported, and the load balance check in
+    # extract() would expose it.
     mesh_technique = 'STRUCTURED'
     try:
         part.setMeshControls(regions=part.faces[:], elemShape=QUAD,
@@ -1207,7 +1255,7 @@ def build_geometry_and_mesh(model_name, seed, analysis_type='STRUCTURAL'):
 
 def apply_ring_constraints(model, inst, step_name, seed):
     """
-    PROCESS 6 (revised).  THREE CIRCUMFERENTIAL RING CONSTRAINTS.
+    PROCESS 6.  THREE CIRCUMFERENTIAL RING CONSTRAINTS.
 
     PROVENANCE
     ----------
@@ -1224,10 +1272,9 @@ def apply_ring_constraints(model, inst, step_name, seed):
     WHY RINGS AND NOT POINTS
     ------------------------
     A point support on a dome apex would concentrate the whole reaction on a
-    few elements of a 4.785 mm shell, giving a spurious local stress of the
-    order of a thousand MPa. That is the same punch-through seen earlier with
-    the 3-2-1 restraint. A ring spreads the reaction over the full
-    circumference, which is what real tank hardware does.
+    few elements of a thin shell, giving a spurious local stress of the order
+    of a thousand MPa (see apply_rigid_body_restraint). A ring spreads the
+    reaction over the full circumference, as real tank hardware does.
 
     WHY THREE AND NOT TWO
     ---------------------
@@ -1246,8 +1293,8 @@ def apply_ring_constraints(model, inst, step_name, seed):
     apart, so the vessel is cold and settled when the load arrives. The only
     thermal load carried here is the wetted-to-dry gradient.
 
-    The anchor-and-slide scheme is nevertheless retained rather than fixing
-    all three rings. Were the reference ever moved back to 293 K, fully
+    The anchor-and-slide scheme is nevertheless used rather than fixing all
+    three rings. Were the reference ever moved to 293 K, fully
     fixing all three would block roughly 95 mm of axial contraction and
     return the fully restrained thermal stress, which exceeds yield - an
     artefact of over-constraining rather than a physical result. Keeping the
@@ -1284,15 +1331,11 @@ def apply_ring_constraints(model, inst, step_name, seed):
     # SNAP TO THE NEAREST NODE PLANE, DO NOT USE A FIXED TOLERANCE.
     #
     # The two junction stations sit on a geometric edge, so nodes line up on
-    # them exactly. Mid-barrel has no such feature, and a fixed tolerance
-    # caught a ragged partial set: an earlier run found 124 nodes at each
-    # junction but only 31 at mid-barrel, against roughly 52 for a complete
-    # circumferential ring. The axial anchor was therefore gripping only part
-    # of the circumference, which is an asymmetric restraint.
-    #
-    # Instead, find the x coordinate of the node plane nearest the requested
-    # station, then take every node on that plane. This always yields one
-    # complete ring regardless of where the mesher happened to put nodes.
+    # them exactly. Mid-barrel has no such feature, and a fixed tolerance can
+    # catch a partial ring (an asymmetric restraint). Instead, the x coordinate
+    # of the node plane nearest the requested station is found, and every node
+    # on that plane is taken. This always gives one complete ring, wherever
+    # the mesher put the nodes.
     xs = []
     for nd in inst.nodes:
         xs.append(nd.coordinates[0])
@@ -1328,50 +1371,29 @@ def apply_ring_constraints(model, inst, step_name, seed):
 
 def apply_inertia_relief(model, step_name):
     """
-    PROCESS 6.  INERTIA RELIEF - the equilibrium device used instead of mounts.
+    ALTERNATIVE MODEL, KEPT FOR FUTURE STUDIES (not called).
 
-    WHY A 3-2-1 RESTRAINT IS NOT SUFFICIENT HERE
-    --------------------------------------------
-    A statically determinate 3-2-1 restraint carries zero reaction only when
-    the applied loads are SELF-EQUILIBRATED. Thermal expansion and uniform
-    internal pressure satisfy that. Inertia does not.
+    INERTIA RELIEF: the applied loads are balanced by a distributed
+    d'Alembert body force proportional to the mass instead of by support
+    reactions. Oom Ortiz de Montellano et al. compared a constrained and an
+    inertia relief model of the same structure and adopted inertia relief.
 
-    Under LC7 the hydrostatic pressure field has a net resultant of
+    WHY THE THESIS USES RINGS INSTEAD
+    ---------------------------------
+    The balancing acceleration is distributed over the model's mass, which is
+    the shell only: the liquid enters as a pressure field, not as mass. Under
+    the emergency landing the whole liquid reaction (562 kN for the E190 at a
+    fill level of 0.90) would be smeared over the shell as a fictitious body
+    force of tens of g, and it would cancel the shell's own inertia exactly.
+    More fundamentally, a CS-25 load factor presupposes a load path: it
+    describes the airframe decelerating the tank, and the stress arises from
+    being held. The ring supports model that load path, and their reactions
+    are the loads the support structure must carry.
 
-        m_LH2 * n * g  =  5104 kg * 11.225 * 9.81  =  562 kN
-
-    and the shell body force adds a further 181 kN. With no mount, nothing
-    balances them, so the entire 743 kN passes through three nodes of a
-    4.785 mm shell. An earlier run of this model did exactly that and returned
-    4943 MPa and a 6.9 m displacement: not a physical result, simply a point
-    load punching through a thin plate.
-
-    THE UNDERLYING POINT
-    --------------------
-    A CS-25 load factor presupposes a restraint. It describes the airframe
-    decelerating the tank. A genuinely unrestrained body does not experience a
-    load factor at all; it simply accelerates. "No mounts" and "CS-25 inertia"
-    are therefore in tension, and the tension has to be resolved explicitly.
-
-    Inertia relief is the standard resolution: the applied loads are balanced
-    by a distributed d'Alembert body force proportional to the mass, rather
-    than by a concentrated reaction. Equilibrium is satisfied, no artificial
-    restraint is introduced, and no stress concentration is created. This is
-    the approach taken by Oom Ortiz de Montellano et al., who tested both a
-    constrained model and an inertia relief model of the same structure and
-    adopted inertia relief for all subsequent analyses.
-
-    ACCEPTED APPROXIMATION
-    ----------------------
-    The balancing acceleration is distributed over the model's mass, which
-    here is the shell only: the liquid appears as a pressure field, not as
-    mass. The reaction is therefore spread over the wall rather than placed
-    where the liquid actually sits. Because the pressure also acts over the
-    wall, the mismatch is in the distribution rather than the magnitude, and
-    it is bounded. It is recorded as a limitation rather than hidden.
-
-    Note that Abaqus requires the free directions under inertia relief to be
-    unconstrained, so no displacement boundary condition is applied.
+    Inertia relief remains useful for a free-body study with a liquid mass
+    model, for example with the liquid as distributed point masses. Abaqus
+    requires the relieved directions to be unconstrained, so no displacement
+    boundary condition may be applied together with it.
     """
     model.InertiaRelief(name='InertiaRelief', createStepName=step_name,
                         u1=ON, u2=ON, u3=ON, ur1=ON, ur2=ON, ur3=ON)
@@ -1380,18 +1402,19 @@ def apply_inertia_relief(model, step_name):
 
 def apply_rigid_body_restraint(model, inst):
     """
-    3-2-1 STATICALLY DETERMINATE RESTRAINT.
+    ALTERNATIVE MODEL, KEPT FOR FUTURE STUDIES (not called).
 
-    RETAINED FOR REFERENCE ONLY - not called in the current analysis chain.
-    See apply_inertia_relief above for why. This is valid only for load cases
-    whose applied loads are self-equilibrated, such as a thermal-only or a
-    uniform-pressure-only study.
+    3-2-1 STATICALLY DETERMINATE RESTRAINT. Valid only when the applied loads
+    are self-equilibrated, as in a thermal-only or a uniform-pressure-only
+    study. Under an inertia load the whole resultant (743 kN for the E190 in
+    the emergency landing) would pass through three nodes of the shell and
+    give a meaningless local stress of thousands of MPa.
 
     This is NOT a mount. It removes the six rigid body modes so that the
     stiffness matrix is non-singular, and nothing else. Because it is
     statically determinate it carries zero reaction under a self-equilibrated
-    load, and it does not resist the thermal contraction: the vessel shrinks
-    freely by alpha*dT*L, which for the E190 is 94.9 mm.
+    load, and it does not resist thermal contraction: from 293 K the E190
+    would shrink freely by alpha*dT*L = 94.9 mm.
 
     Node A: fix u1, u2, u3      (3 DOF)
     Node B: fix u2, u3          (2 DOF)  - allows axial growth
@@ -1432,37 +1455,12 @@ def job_succeeded(jname):
     """
     Did the Abaqus job finish cleanly?
 
-    WHY THIS EXISTS, AND WHY mdb.Job.status IS NOT USED.
-    ----------------------------------------------------
-    The obvious test is
-
-        jt.waitForCompletion()
-        if jt.status != COMPLETED: ...
-
-    and it works inside Abaqus/CAE, because the GUI runs a job monitor that
-    keeps the Job object's status member up to date. A headless run started
-    with
-
-        abaqus cae noGUI=E190_MASTER_thermo_structural.py
-
-    has no such monitor, so status can still read RUNNING - or nothing useful
-    at all - after waitForCompletion() has returned. The test then rejects a
-    job that in fact succeeded.
-
-    That is precisely what happened on the first full headless attempt: all
-    twenty heat transfer jobs solved correctly, each reporting
-
-        Abaqus JOB HT_<tag> COMPLETED
-        THE ANALYSIS HAS COMPLETED SUCCESSFULLY
-        0 ERROR MESSAGES
-
-    in twelve seconds apiece, and all twenty were discarded by the status
-    check before the structural half could run. Twenty good thermal .odb files
-    on disk, no results, and a misleading "job failed" message for each.
-
-    The job's own .log file is the authority: Abaqus writes the COMPLETED line
-    there itself, and it is identical in GUI and headless runs. So that is
-    what is read here.
+    WHY mdb.Job.status IS NOT USED. Inside the CAE GUI a job monitor keeps
+    the status member of the Job object up to date. A noGUI run has no such
+    monitor, so status can still read RUNNING after waitForCompletion() has
+    returned, and a job that succeeded would be rejected. The job's own .log
+    file is the authority: Abaqus writes the line "JOB <name> COMPLETED"
+    there itself, identically in GUI and noGUI runs.
     """
     logf = jname + '.log'
     if not os.path.isfile(logf):
@@ -1492,32 +1490,24 @@ def split_wetted_dry(model, inst, g_hat, s_surf, tag):
     fill ratio falls, the wetted set shrinks, more of the wall is exposed to
     the poorly conducting ullage gas, and the temperature gradient grows.
 
-    THE SPLIT USES THE TILTED FREE SURFACE, NOT A HORIZONTAL ONE.
-    DO NOT REVERT TO elem_centroid_z AND fill_surface_height.
-    --------------------------------------------------------------------
-    An earlier version partitioned by vertical centroid height against
-    fill_surface_height(phi_f), which takes no load case at all. The thermal
-    model therefore placed the liquid in a horizontal band along the bottom of
-    the tank for EVERY load case, while the structural model placed it against
-    the tilted resultant. The two halves of a coupled analysis disagreed about
-    where the fuel was.
-
-    The signature in the results was plain once looked for: the wetted-to-dry
-    dT came out bit-identical across Baseline, LC1, LC3 and LC7 at every fill
-    ratio (3.62878036499023 K at phi_f = 0.10 for all four). That cannot be
-    physical. Under LC7 the resultant tilts 57.7 degrees and the fuel surges
-    forward: at phi_f = 0.10 the real wetted zone is a wedge in the last 1.9 m
-    of the barrel, roughly 7 per cent of the wall, not a strip running its
-    whole length. Different wetted footprint, different temperature field.
+    THE SPLIT USES THE FREE SURFACE OF THE LOAD CASE, the same g_hat and
+    s_surf as the hydrostatic pressure, so the thermal and structural models
+    place the liquid in the same place. An element is wetted when its centroid
+    lies below the free surface. Under the emergency landing the resultant
+    tilts 57.7 degrees and the liquid moves forward: at a fill level of 0.10
+    the wetted zone of the E190 is a wedge in the last 1.9 m of the barrel,
+    about 7 percent of the wall, not a strip along the bottom. A horizontal
+    split (fill_surface_height) would give the same temperature field for
+    every load case.
 
     Returns SURFACES, not sets. Film conditions and surface heat fluxes act on
     a surface, because a shell has two faces and Abaqus has to be told which
     one the load applies to. Passing a plain element Set raises a region error.
 
     SIDE CONVENTION: side2 is the INNER face on this revolved geometry, so it
-    is side2 that carries the film conditions. This is the same convention the
-    pressure loads use, and it was verified there by the sign of the load
-    balance - see the note at the Pressure() call.
+    is side2 that carries the film conditions. The pressure loads use the
+    same face, which the sign of the load balance confirms (see the note at
+    the Pressure() call).
     """
     wet, dry = [], []
     for el in inst.elements:
@@ -1563,15 +1553,26 @@ def _usable_ht(path):
 
 def run_case(lc_name, factors, phi_f, seed, tag, ht_from=None):
     """
-    One (load case, fill ratio) point. Runs the heat transfer analysis, then
-    the static analysis reading its temperature field.
+    One design point (load case, fill level). Runs the heat transfer
+    analysis, then the static analysis reading its temperature field, and
+    returns the dictionary of results from extract(), or None if a job fails.
 
-    ht_from (added 27 Sep 2026): path of an existing heat-transfer job for
-    the SAME wall, mesh, load direction and fill. Pressure does not enter
-    the heat-transfer problem, so the temperature field at 0.187 bar and at
-    1.5 bar is identical; when ht_from is usable it is read instead of being
-    solved again. The structural half checks that its mesh matches it node
-    for node and stops if it does not.
+        lc_name   load-case code, for example 'LC7_Emergency'
+        factors   {'nx': ..., 'ny': ..., 'nz': ...}, load factors in g
+        phi_f     fill level, 0 to 1
+        seed      element size [m]
+        tag       job name stem: jobs HT_<tag> and ST_<tag>
+        ht_from   optional path (without .odb) of an existing heat transfer
+                  job for the SAME wall, mesh, load direction and fill.
+                  Pressure does not enter the heat transfer problem, so the
+                  temperature field at the stability and at the design
+                  pressure is identical, and a usable ht_from is read instead
+                  of being solved again. The static model checks that its
+                  mesh matches it node for node and stops if it does not.
+
+    Loads and boundary conditions use the module-level inputs of section 1
+    (P_gauge, h_wetted, h_dry, q_outer, T_ref, ...). This is the place to add
+    a new load or boundary condition.
     """
     reuse_t = _usable_ht(ht_from) if ht_from else None
     nx, ny, nz = factors['nx'], factors['ny'], factors['nz']
@@ -1614,8 +1615,8 @@ def run_case(lc_name, factors, phi_f, seed, tag, ht_from=None):
                                   surface=surfs['dry'], definition=EMBEDDED_COEFF,
                                   filmCoeff=h_dry, sinkTemperature=T_GH2)
 
-        # FORMULA 5: heat arriving through the MLI, on the OUTER face. The inner
-        # face carries the film conditions above, so this goes on side2.
+        # FORMULA 5: heat arriving through the insulation, on the OUTER face
+        # (side1). The inner face (side2) carries the film conditions above.
         outer_surf = model_t.rootAssembly.Surface(
             name='Outer_%s' % tag, side1Elements=inst_t.elements[:])
         model_t.SurfaceHeatFlux(name='MLI_flux', createStepName='Thermal',
@@ -1641,21 +1642,18 @@ def run_case(lc_name, factors, phi_f, seed, tag, ht_from=None):
 
     model.StaticStep(name='Static', previous='Initial', timePeriod=1.0)
 
-    # PROCESS 6. Three circumferential rings after Bagarello Sec. 4.4.1.
-    # Inertia relief is no longer used: with a real load path the applied
-    # loads are reacted at the rings, which is what a CS-25 load factor
-    # physically describes. apply_inertia_relief() is retained below for the
-    # free-body reference case.
+    # PROCESS 6. Three circumferential rings after Bagarello Sec. 4.4.1. The
+    # applied loads are reacted at the rings, which is what a CS-25 load
+    # factor physically describes. (apply_inertia_relief is the free-body
+    # alternative, not used.)
     apply_ring_constraints(model, inst, 'Static', seed)
 
-    # INITIAL TEMPERATURE - THE STRESS-FREE STATE. DO NOT REMOVE.
+    # INITIAL TEMPERATURE: THE STRESS-FREE STATE. DO NOT REMOVE.
     #
-    # Abaqus computes thermal strain as alpha * (T_current - T_INITIAL), NOT
-    # relative to the Expansion 'zero' value. Without an initial condition the
-    # initial temperature defaults to 0 K, and the model then believes the
-    # vessel is being warmed from 0 K, which is wrong by any reckoning. An
-    # earlier run showed exactly that: u_max of 3.22 mm where the thermal load
-    # was effectively absent.
+    # Abaqus computes thermal strain from the INITIAL temperature, not only
+    # from the Expansion 'zero' value. Without an initial condition the
+    # initial temperature defaults to 0, and the model would treat the vessel
+    # as warmed from 0 K.
     #
     # T_ref is the COLD operating state, 20.3 K (see the block where it is
     # defined). The structure is therefore stress-free when cold, and the only
@@ -1671,45 +1669,24 @@ def run_case(lc_name, factors, phi_f, seed, tag, ht_from=None):
     # ------------------------------------------------------------------
     # TEMPERATURE FIELD.  FORMULA 8
     #
-    # THE FIELD IS READ AND RE-APPLIED EXPLICITLY. DO NOT REVERT TO
-    # distributionType=FROM_FILE. THE REASON IS MEASURED, NOT ASSUMED.
+    # The nodal temperatures are read from the heat transfer .odb, grouped
+    # into 24 bins, and applied as UNIFORM fields with
+    # crossSectionDistribution=CONSTANT_THROUGH_THICKNESS. The bin width is
+    # (T_max - T_min)/24, 0.14 to 0.31 K for the thesis tanks.
     #
-    # The shell section is declared `temperature=GRADIENT`, which means every
-    # temperature supplied to it is a PAIR: a mid-surface value and a
-    # through-thickness gradient. A predefined field read FROM_FILE off the
-    # heat transfer .odb does not reliably deliver a zero second term, so the
-    # wall ends up carrying a through-thickness temperature difference that
-    # does not exist in the heat transfer solution at all.
+    # WHY NOT distributionType=FROM_FILE. The shell section is declared
+    # temperature=GRADIENT, so every temperature supplied to it is a PAIR: a
+    # mid-surface value and a through-thickness gradient. A predefined field
+    # read FROM_FILE does not reliably deliver a zero gradient, and a spurious
+    # through-thickness difference of about 20 K was observed, which roughly
+    # doubled the stresses through bending. The real through-thickness drop
+    # of a thin aluminium wall carrying a few W/m2 is of order 1e-4 K.
+    # CONSTANT_THROUGH_THICKNESS sets the gradient to zero by construction.
     #
-    # WHAT IT COST. Measured on a mid-barrel element far from every ring,
-    # ST_Baseline_f10.odb:
-    #
-    #     SNEG  hoop 85.99 MPa   axial 64.56 MPa
-    #     SPOS  hoop 36.75 MPa
-    #
-    #     membrane hoop = (85.99 + 36.75)/2 = 61.37 MPa   correct: 40.80
-    #     bending  hoop = (85.99 - 36.75)/2 = 24.62 MPa   correct: ZERO
-    #
-    # A cylinder under uniform internal pressure has NO through-thickness
-    # bending at mid-span. The 24.62 MPa implies a through-thickness dT of
-    # 24.62 / [E*alpha/(2(1-nu))] = 20.2 K. The wall is 4.785 mm of aluminium
-    # at k = 116 W/m-K carrying about 9 W/m2; the real through-thickness drop
-    # is of order 1e-4 K. The gradient is entirely an artefact of the
-    # coupling, and it inflated every reported stress by roughly a factor of
-    # two. It is invisible to the load-balance check because bending through
-    # the thickness is self-equilibrated.
-    #
-    # WHAT IS DONE INSTEAD. The nodal temperatures are read straight out of
-    # the heat transfer .odb, binned, and applied as UNIFORM fields with
-    # crossSectionDistribution=CONSTANT_THROUGH_THICKNESS. That keyword forces
-    # the gradient term to zero by construction, so the artefact cannot recur.
-    # This mirrors the pressure binning used below, which is already proven.
-    #
-    # ACCEPTANCE TEST after any change here. Probe a mid-barrel element at
-    # least 1 m from any ring. BOTH section points must agree, at hoop
-    # 40.8 MPa and axial 20.4 MPa, von Mises 35.3 MPa. If SNEG and SPOS
-    # disagree at mid-span, the coupling is wrong and the results are not
-    # usable.
+    # ACCEPTANCE TEST after any change here: in a dry region far from the
+    # rings, both section points (SNEG, SPOS) must give the membrane values,
+    # hoop pR/t and axial pR/2t. extract() records this as the probe_*
+    # columns of the results file.
     # ------------------------------------------------------------------
     odb_t = openOdb(path=jname_t + '.odb', readOnly=True)
     t_frame = odb_t.steps['Thermal'].frames[-1]
@@ -1771,8 +1748,10 @@ def run_case(lc_name, factors, phi_f, seed, tag, ht_from=None):
     #
     # g_hat and s_surf are NOT recomputed here. They are taken from the top of
     # run_case, where they were computed once and handed to the thermal model
-    # as well. Recomputing them in two places is how the thermal and
-    # structural halves drifted apart in the first place.
+    # as well, so both models see the same free surface.
+    #
+    # The elements are grouped into n_bins bins of depth along g_hat, and each
+    # bin carries the uniform pressure at its mid-depth.
     s_list = []
     for el in inst.elements:
         s_list.append((el.label, elem_depth_coord(el, g_hat)))
@@ -1799,44 +1778,32 @@ def run_case(lc_name, factors, phi_f, seed, tag, ht_from=None):
         bset = model.rootAssembly.Set(
             name='PB_%s_%02d' % (tag, idx),
             elements=inst.elements.sequenceFromLabels(tuple(labels)))
-        # side2 IS THE INNER FACE on this revolved geometry. Verified by the
-        # load balance: with side1 the hydrostatic reaction came out at
-        # -561.4 kN against an applied +562.0 kN - correct magnitude, opposite
-        # sign - meaning the liquid was pushing inward instead of outward.
+        # side2 IS THE INNER FACE on this revolved geometry. Confirmed by the
+        # load balance: on side1 the hydrostatic resultant has the right
+        # magnitude but the opposite sign (the liquid pushes inward).
         bsurf = model.rootAssembly.Surface(name='PS_%s_%02d' % (tag, idx),
                                            side2Elements=bset.elements)
         model.Pressure(name='P_%s_%02d' % (tag, idx), createStepName='Static',
                        region=bsurf, magnitude=p_tot,
                        distributionType=UNIFORM)
 
-    # FORMULA 7: inertial body force on the shell's own mass. The liquid's
-    # inertia is carried by the scaled hydrostatic pressure above, not here.
-    # AXIS MAPPING AND SIGNS. The vessel is revolved about global X, so:
+    # FORMULA 7: inertial body force on the shell's own mass. The inertia of
+    # the liquid is carried by the scaled hydrostatic pressure above, not here.
+    #
+    # AXIS MAPPING. The vessel is revolved about global X, so:
     #     comp1 = global X = FORWARD  -> n_x
     #     comp2 = global Y = UP       -> n_z
     #     comp3 = global Z = LATERAL  -> n_y
     #
-    # The vertical and lateral components were transposed in an earlier
-    # version, which applied 6 g sideways and 3 g downwards under LC7.
+    # SIGNS. The CS 25.561 load factors are named by the direction in which
+    # the inertia force ACTS ON THE ITEM. "Downward 6.0 g" is a force downward
+    # and +Y is up, so comp2 = -nz*g. "Forward 9.0 g" is a force forward and
+    # +X is forward, so comp1 = +nx*g. The opposite signs come from the axis
+    # naming, not from the physics. The liquid therefore collects against the
+    # forward cap in the emergency landing.
     #
-    # SIGNS. The CS-25.561 load factors are named by the direction in which the
-    # inertia force ACTS ON THE ITEM. "Downward 6.0 g" is a force downward, and
-    # +Y is up, so comp2 = -nz*g. "Forward 9.0 g" is a force FORWARD, and +X is
-    # forward, so comp1 = +nx*g. The two therefore carry opposite signs, which
-    # looks odd but is correct: the asymmetry comes from the axis naming, not
-    # from the physics.
-    #
-    # An earlier version used -nx*g, which threw the contents AFT. The stress
-    # magnitudes were identical because the problem is mirror-symmetric, but
-    # the liquid piled against the wrong cap and every contour showed the peak
-    # at the wrong end of the tank.
-    # UNITS. BodyForce (*DLOAD type BX/BY/BZ) expects force per unit VOLUME,
-    # i.e. rho*a, not an acceleration. Passing the acceleration directly made
-    # the shell inertia 2850 times too small: 51 N instead of 181.5 kN, which
-    # is why the mount reaction came back as the liquid resultant alone.
-    #
-    # Gravity takes an ACCELERATION and multiplies by the material density
-    # itself, so it cannot be got wrong this way. It is used in preference.
+    # UNITS. Gravity takes an ACCELERATION and multiplies it by the material
+    # density itself. (BodyForce would expect force per unit volume, rho*a.)
     model.Gravity(name='Inertia', createStepName='Static',
                   comp1=nx * g, comp2=-nz * g, comp3=-ny * g,
                   distributionType=UNIFORM)
@@ -1859,10 +1826,10 @@ def run_case(lc_name, factors, phi_f, seed, tag, ht_from=None):
 
 def _free(*names):
     """
-    Remove finished models and jobs from the CAE session (added 27 Sep 2026).
-    Each case builds two models with a full mesh and hundreds of load sets.
-    Twenty cases fit in memory; the ~70 of a chained FINAL session may not.
-    The ODBs on disk are untouched.
+    Remove finished models and jobs from the CAE session. Each design point
+    builds two models with a full mesh and hundreds of load sets; twenty fit
+    in memory, the roughly 70 of a FINAL session may not. The .odb files on
+    disk are untouched.
     """
     for n in names:
         for repo in (mdb.jobs, mdb.models):
@@ -1875,18 +1842,28 @@ def _free(*names):
 
 def extract(jname_t, jname_s, lc_name, phi_f, seed, factors):
     """
-    Pull the quantities the thesis reports.
+    Read the results of one design point from the two output databases and
+    return them as a dictionary (one row of the results file; the columns
+    are listed in BASE_KEYS and EXTRA_KEYS and described in the README).
 
-    FORMULA 9 (von Mises) is evaluated by the solver; this reads the maximum.
-    Reaction forces are summed as a check that the 3-2-1 restraint really is
-    carrying nothing.
+    Thermal     T_min, T_max, dT, peak wall heat flux
+    Strength    far-field von Mises stress (FORMULA 9, evaluated by the
+                solver) and the reserve factor fos = sigma_allow / sigma
+    Stability   minimum axial membrane stress of the barrel against the
+                SP-8007 allowable: buckling_fos
+    Checks      stress orientation, load balance (reaction against applied
+                load), membrane probe, ovality, reaction at each ring,
+                membrane stress in the caps
+
+    This is the place to add a new result: compute it here, add it to the
+    returned dictionary and its key to EXTRA_KEYS.
     """
     odb_t = openOdb(path=jname_t + '.odb')
     fr_t = odb_t.steps['Thermal'].frames[-1]
     temps = [v.data for v in fr_t.fieldOutputs['NT11'].values]
     T_min, T_max = min(temps), max(temps)
-    # Peak wall heat flux (added 27 Sep 2026), so the waterline flux quoted in
-    # the report is a recorded number, not one read off a colour legend.
+    # Peak wall heat flux, so the waterline flux quoted in the thesis is a
+    # recorded number, not one read off a colour legend.
     hfl_max = 0.0
     try:
         for v in fr_t.fieldOutputs['HFL'].values:
@@ -1911,40 +1888,38 @@ def extract(jname_t, jname_s, lc_name, phi_f, seed, factors):
     # A rigid displacement boundary condition applied along a line of nodes
     # on a shell is a mathematical idealisation with zero contact area. The
     # stress there is SINGULAR: it grows without limit as the mesh is
-    # refined and never converges. The convergence study showed exactly
-    # this behaviour, with the peak rising 108.0 -> 108.0 -> 122.1 -> 140.6
-    # MPa on successive refinements, the increments GROWING rather than
-    # shrinking, and a fitted exponent of sigma ~ h^-0.19.
-    #
-    # Meanwhile the global response converged cleanly over the same range:
-    # the mount reaction to 0.2 percent and the peak displacement to 0.9
-    # percent. The divergence is therefore local to the constraint and is
-    # not a structural response.
+    # refined and never converges. In the convergence study of the E190
+    # (governing case, seeds 41.0, 20.5 and 10.2 mm) the peak including the
+    # rings goes 271.5 -> 256.3 -> 295.1 MPa, rising again at the finest
+    # mesh, while the far-field peak goes 271.5 -> 256.3 -> 256.8 MPa and the
+    # total reaction is constant at 614.2 kN to 0.03 percent. The divergence
+    # is therefore local to the constraint, not a structural response
+    # (results/mesh_convergence/).
     #
     # The peak is consequently taken OUTSIDE an exclusion zone around each
     # ring. The justification is Saint-Venant's principle: a local load
     # introduction decays over a distance comparable with the shell decay
-    # length sqrt(R*t), which is 78.9 mm here. The 0.5 m zone adopted is
-    # 6.3 decay lengths, so the reported stress is a genuine far-field
+    # length pi/beta, 0.10, 0.13 and 0.30 m for the sized E190, A320 and
+    # A350-900 walls. The 0.5 m zone adopted spans 5.0, 3.9 and 1.7 decay
+    # lengths, where the edge disturbance has fallen to 2e-7, 4e-6 and 5e-3
+    # of its value at the ring, so the reported stress is a genuine far-field
     # value governed by global equilibrium rather than by the details of
     # the attachment.
     #
     # This follows Oom Ortiz de Montellano et al., who documented the same
     # artefact for constrained boundary conditions, and is the treatment
-    # already set out in section_boundary_conditions.tex.
+    # set out in thesis Section 4.7.
     #
     # WHAT THIS EXCLUDES: the local fitting design at the rings, which in a
-    # detailed design would need a doubler or wear plate. Stated as a
-    # limitation, not concealed.
+    # detailed design would need a doubler or wear plate (a stated
+    # limitation of the thesis).
     ring_x = [0.0, L_barrel / 2.0, L_barrel]
 
     # element label -> centroid x, taken from the odb mesh.
     #
-    # PERFORMANCE. getNodeFromLabel() is a lookup, and calling it once per
-    # node per element is roughly a million calls on the finest mesh, which
-    # takes minutes in the Abaqus interpreter. The node coordinates are
-    # therefore hoisted into a dictionary once, turning the inner loop into
-    # a constant-time dictionary access.
+    # PERFORMANCE. The node coordinates are read into a dictionary once.
+    # Calling getNodeFromLabel() per node per element would be about a
+    # million lookups on the finest mesh, minutes in the Abaqus interpreter.
     ncoord = {}
     nxyz = {}
     for nd in inst_s.nodes:
@@ -1979,21 +1954,25 @@ def extract(jname_t, jname_s, lc_name, phi_f, seed, factors):
     s_max_all = max(s_all) if s_all else 0.0
     s_max = max(s_far) if s_far else s_max_all
 
-    # ---------------- AXIAL MEMBRANE STRESS FOR THE BUCKLING SCREEN -------
-    # Added 27 Sep 2026. Barrel only (SP-8007 is a cylinder result), far
-    # field only (outside FAR_FIELD_EXCLUSION of every ring).
+    # ---------------- AXIAL MEMBRANE STRESS FOR THE BUCKLING CRITERION ----
+    # Barrel only (SP-8007 is a cylinder result), far field only (outside
+    # FAR_FIELD_EXCLUSION of every ring).
     #
     # S11 IS AXIAL HERE. No material orientation is assigned, so Abaqus takes
     # local direction 1 as the projection of global X onto the shell, and X is
-    # the tank axis. (The superseded sizing scripts were Z-axial, where the
-    # same default made S11 the HOOP stress at the crown and keel.) This is
-    # checked, not assumed: under internal pressure the mean hoop membrane
-    # stress must exceed the mean axial one, so if the mean of S11 exceeds
-    # the mean of S22 the orientation is wrong and the run says so.
+    # the tank axis. (With the tank axis along Z the same default would make
+    # S11 the HOOP stress at the crown and keel.) This is checked, not
+    # assumed: under internal pressure the mean hoop membrane stress must
+    # exceed the mean axial one, so if the mean of S11 exceeds the mean of
+    # S22 the orientation is wrong and the run says so (orientation_ok).
     #
     # Membrane = mean of the two section points (SNEG, SPOS); bending, the
-    # half-difference, is excluded, as the SP-8007 screen consumes membrane
+    # half-difference, is excluded, as the SP-8007 criterion consumes membrane
     # stress.
+    #
+    # The caps are recorded separately for a head stability check: under
+    # internal pressure an a/b = 1.6 head carries hoop COMPRESSION near its
+    # equator, (pR/t)(1 - a^2/2b^2) in membrane theory.
     sp_vals = {}
     cap_vals = {}
     for v in s_field.values:
@@ -2003,9 +1982,7 @@ def extract(jname_t, jname_s, lc_name, phi_f, seed, factors):
         in_barrel = (FAR_FIELD_EXCLUSION <= x_ <= L_barrel / 2.0 - FAR_FIELD_EXCLUSION or
                      L_barrel / 2.0 + FAR_FIELD_EXCLUSION <= x_ <= L_barrel - FAR_FIELD_EXCLUSION)
         if x_ < 0.0 or x_ > L_barrel:
-            # End caps (heads), recorded for a head-stability check: under
-            # internal pressure an a/b = 1.6 head carries hoop COMPRESSION
-            # near its equator, (pR/t)(1 - a^2/2b^2) in membrane theory.
+            # end caps: recorded for the head stability check
             spn_ = v.sectionPoint.number if v.sectionPoint is not None else 0
             cap_vals.setdefault(v.elementLabel, []).append((spn_, v.data[0], v.data[1]))
             continue
@@ -2036,13 +2013,13 @@ def extract(jname_t, jname_s, lc_name, phi_f, seed, factors):
     s_cr = sigma_cr_sp8007(R_mid, t_wall)
     buck_fos = (s_cr / -ax_min) if ax_min < 0 else float('inf')
 
-    # ---------------- RECORDED CHECKS (added 27 Sep 2026) -----------------
+    # ---------------- RECORDED CHECKS ------------------------------------
     # (1) MEMBRANE AND THROUGH-THICKNESS PROBE. The crown element nearest
     #     x = L/4 (mid aft bay, at least 1 m from any ring on all three tanks)
     #     and its S11 (axial) and S22 (hoop) at both section points. Under a
     #     vertical load at low fill the crown is dry, so hoop ~ pR/t and
     #     axial ~ pR/2t, and the two surfaces must agree (no fictitious
-    #     through-thickness bending). Previously done by hand; now recorded.
+    #     through-thickness bending).
     ecen = {}
     for el in inst_s.elements:
         xs_, ys_, zs_, c_ = 0.0, 0.0, 0.0, 0
@@ -2090,7 +2067,8 @@ def extract(jname_t, jname_s, lc_name, phi_f, seed, factors):
                 ur_flank = max(sec, key=lambda c: c[1])[2]
 
     # (3) REACTION AT EACH RING, so the load split between the three rings is
-    #     a recorded result rather than a beam-theory estimate.
+    #     a recorded result rather than a beam-theory estimate. The total
+    #     reaction (sumRF_N) is the load the support structure must carry.
     ring_rf = [[0.0, 0.0, 0.0] for _ in ring_x]
     for v in fr_s.fieldOutputs['RF'].values:
         q_ = nxyz.get(v.nodeLabel)
@@ -2127,19 +2105,18 @@ def extract(jname_t, jname_s, lc_name, phi_f, seed, factors):
     # applied load has exactly two parts, both computable in closed form:
     #
     #   gravity on the shell  : m_shell * a, along the load-factor direction
-    #   hydrostatic resultant : rho_LH2 * |n| * g * V_liquid, straight DOWN,
-    #                           because the model measures depth vertically
+    #   hydrostatic resultant : rho_LH2 * |n| * g * V_liquid, along the load
+    #                           direction, because depth is measured along it
     #
     # The uniform p_gauge term nets to zero on a closed surface and does not
     # appear. If it DOES appear, the shell normals are inconsistent and some
-    # elements are being pressurised on the wrong face - which would corrupt
-    # the stress field as well as the balance.
+    # elements are being pressurised on the wrong face, which would corrupt
+    # the stress field as well as the balance. A ratio outside 1 +/- 0.02 is
+    # printed with its components, and stops a sizing run.
     nx_, ny_, nz_ = factors['nx'], factors['ny'], factors['nz']
     n_mag_ = math.sqrt(nx_ * nx_ + ny_ * ny_ + nz_ * nz_)
-    # Use the mass Abaqus actually meshed, not the analytic estimate. The
-    # analytic A_shell approximates the cap area as 2*pi*R*h_cap and
-    # underestimates by about 7.7 percent, which showed up as a spurious
-    # 7.7 percent imbalance in X and Z.
+    # Use the mass Abaqus actually meshed rather than the analytic estimate,
+    # so the check compares the model with itself.
     m_shell = A_shell * t_wall * rho_shell
     if MESHED_MASS is not None and MESHED_MASS > 0.0:
         m_shell = MESHED_MASS
@@ -2147,13 +2124,7 @@ def extract(jname_t, jname_s, lc_name, phi_f, seed, factors):
 
     # Global axes: 1 = X forward, 2 = Y up, 3 = Z lateral.
     #
-    # THE LIQUID RESULTANT ACTS ALONG THE TILTED DIRECTION, NOT VERTICALLY.
-    # An earlier version of this check placed the whole liquid resultant on
-    # the Y axis. That was correct while the model measured depth vertically,
-    # but wrong once the tilted free surface was introduced, and it produced
-    # component ratios of 3.8 and 0.6 on cases that were in fact balanced to
-    # better than one percent.
-    #
+    # THE LIQUID RESULTANT ACTS ALONG THE LOAD DIRECTION, NOT VERTICALLY.
     # With the liquid settling along g_hat = (-nx, -nz, -ny)/|n| and its
     # resultant being m_liq * |n| * g in that direction, the |n| cancels and
     # the applied load collapses to the obvious result: the total mass times
@@ -2219,15 +2190,21 @@ def extract(jname_t, jname_s, lc_name, phi_f, seed, factors):
 # ============================================================================
 #
 # RUN MODES
-#   PRODUCTION   4 load cases x 5 fills at the design pressure (strength).
-#   STABILITY    the same 20 cases at the stability pressure (buckling).
-#   CONVERGENCE  LC7 fill 0.9 over a sweep of mesh densities, at the design
-#                pressure AND at the stability pressure.
+#   PRODUCTION   every load case at every fill level (thesis: 4 x 5) at the
+#                design pressure (strength).
+#   STABILITY    the same matrix at the stability pressure (buckling).
+#   CONVERGENCE  the governing case (thesis: emergency landing at fill 0.90)
+#                over a sweep of mesh densities, at the design pressure AND
+#                at the stability pressure.
 #   SIZING       finite-element wall sizing, recorded in sized_walls.csv.
 #   FINAL        SIZING -> PRODUCTION -> STABILITY -> CONVERGENCE in one
-#                session (added 27 Sep 2026). Each stage writes its CSV the
-#                moment it finishes; a stage whose CSV already exists at the
-#                current wall is skipped, so a crash costs one stage, not all.
+#                session. Results are written after every design point; a
+#                stage whose file is already complete at the current wall is
+#                skipped, and an interrupted stage resumes where it stopped.
+#
+# Results files: one row per design point, columns BASE_KEYS + EXTRA_KEYS
+# (a sizing file has a leading 'stage' column). A new result is added to the
+# dictionary returned by extract() and its key appended to EXTRA_KEYS.
 
 BASE_KEYS = ['load_case', 'fill', 'seed_mm', 'n_el', 'n_nd', 'T_min', 'T_max',
              'dT', 'mises_MPa', 'mises_singular_MPa', 'fos', 'u_max_mm', 'sumRF_N']
@@ -2243,6 +2220,7 @@ P_DESIGN = P_gauge                     # strength pressure, as loaded above
 
 
 def write_rows(path, rows, lead=()):
+    """Write result dictionaries as a CSV file with the standard columns."""
     keys = list(lead) + BASE_KEYS + EXTRA_KEYS
     fh = open(path, 'w')
     fh.write(','.join(keys) + '\n')
@@ -2264,6 +2242,7 @@ def stage_done(path, n_expected):
 
 
 def _typed(row):
+    """A CSV row with its numbers and booleans converted back from text."""
     out = {}
     for k, v in row.items():
         if v in ('True', 'False'):
@@ -2303,6 +2282,7 @@ def done_rows(path, pressure, pattern=None):
 
 
 def set_wall(t_new):
+    """Change the wall thickness and the mesh seed that follows from it."""
     global t_wall, boundary_layer, seed_size
     t_wall = t_new
     boundary_layer = math.sqrt(R_mid * t_wall)
@@ -2310,6 +2290,7 @@ def set_wall(t_new):
 
 
 def record_sized_wall(fos_b, fos_y, govern=''):
+    """Write or replace this aircraft's row of sized_walls.csv."""
     rows = []
     if os.path.exists(SIZED_WALLS):
         rows = [r for r in csv.DictReader(open(SIZED_WALLS)) if r.get('aircraft') != CASE_TAG]
@@ -2329,6 +2310,7 @@ def record_sized_wall(fos_b, fos_y, govern=''):
 
 
 def in_dir(sub):
+    """Change to a sub-folder of the results folder, creating it if needed."""
     d = os.path.join(_ROOT_DIR, sub)
     if not os.path.isdir(d):
         os.makedirs(d)
@@ -2337,27 +2319,40 @@ def in_dir(sub):
 
 
 def stage_sizing():
-    # PROCESS 11 (revised 27 Sep 2026, after the first campus iteration).
-    # The wall is sized by WHICHEVER of three requirements needs most metal:
-    #   buckling  FOS >= 1.5 against SP-8007, at the stability pressure
-    #   yield     far-field von Mises <= F_ty/1.5 = 262 MPa (fos >= 1.0),
-    #             at the design pressure
-    #   minimum gauge MIN_GAUGE (ASME BPVC VIII-1, UG-16(b): 1/16 in.)
-    # Each iteration runs LC7 fill 0.9 at both pressures. Buckling FOS scales
-    # about as t^2 and the yield fos about as t, which gives the next wall.
-    # Converged when the governing requirement is met within 2 %, or when the
-    # wall sits at the minimum gauge with both others satisfied.
+    """
+    PROCESS 8. FINITE-ELEMENT WALL SIZING.
+
+    The wall is sized by WHICHEVER requirement needs the most metal:
+      buckling       buckling_fos >= FOS_BUCKLING (1.5) against SP-8007, at
+                     the stability pressure
+      yield          far-field von Mises <= F_ty/1.5 = 262 MPa (fos >= 1.0),
+                     at the design pressure
+      minimum gauge  MIN_GAUGE, if set (ASME BPVC VIII-1, UG-16(b))
+
+    Each iteration solves the governing case at both pressures (the second
+    reuses the thermal field of the first). The buckling reserve scales about
+    as t^2 and the yield reserve about as t, which gives the next wall, with
+    the step limited to a factor of two and replaced by bisection once a
+    passing and a failing wall are known. Then the other candidate design
+    points are checked for buckling at the final wall, and the wall is
+    thickened once more if one of them governs. The result is recorded in
+    sized_walls.csv; every iteration is written to
+    sizing_fe/<AC>/<AC>_sizing_results.csv.
+
+    A new sizing criterion is added here: compute its reserve in extract(),
+    and include its required thickness ratio in g below.
+    """
     global P_gauge
     rows = []
     in_dir(os.path.join('sizing_fe', CASE_TAG))
-    lc7 = load_cases['LC7_Emergency']
+    lc7 = GOVERNING_FACTORS              # governing case (thesis: emergency landing, fill 0.90)
     t_try, sized, govern = max(t_wall, MIN_GAUGE), False, ''
     MIN_T = max(MIN_GAUGE, 0.2e-3)       # numerical floor only, never reached in practice
-    # ACCEPTANCE (revised on campus, 27 Sep). The governing requirement must be
-    # met with at most ~6 % surplus (buckling FOS 1.50-1.60, yield fos
-    # 1.00-1.06). A narrower window made the A350 oscillate: the mesh changes
-    # with the wall, so a 2.5 % change in t moved its buckling FOS from 1.44
-    # to 1.59, straddling a 1.50-1.53 window forever. In addition, once a
+    # ACCEPTANCE. The governing requirement must be met with at most about
+    # 6 % surplus (buckling FOS 1.50 to 1.60, yield fos 1.00 to 1.06). The
+    # window cannot be much narrower: the mesh changes with the wall, so a
+    # small change in t can move the buckling FOS by several percent (for the
+    # A350-900, 2.5 % in t moved it from 1.44 to 1.59). In addition, once a
     # failing and a passing wall are within 3 % of each other, the passing
     # one is taken.
     G_LO = 0.94
@@ -2369,9 +2364,9 @@ def stage_sizing():
         ttag = ('%.3f' % (t_wall * 1e3)).replace('.', 'p')
         P_gauge = P_STABILITY
         tag_b = '%sSZ%d_t%s_pmin' % (TAG_PREFIX, it, ttag)
-        rb = run_case('LC7_Emergency', lc7, 0.9, seed_size, tag_b)
+        rb = run_case(GOVERNING_CASE, lc7, GOVERNING_FILL, seed_size, tag_b)
         P_gauge = P_DESIGN
-        ry = run_case('LC7_Emergency', lc7, 0.9, seed_size,
+        ry = run_case(GOVERNING_CASE, lc7, GOVERNING_FILL, seed_size,
                       '%sSZ%d_t%s_pdes' % (TAG_PREFIX, it, ttag),
                       ht_from=os.path.join(os.getcwd(), 'HT_' + tag_b))
         if not rb or not ry:
@@ -2419,12 +2414,14 @@ def stage_sizing():
     if not sized:
         raise RuntimeError('sizing did not converge in 10 iterations (last t = %.3f mm)'
                            % (t_wall * 1e3))
-    # Buckling verification on the other candidate cases at the final wall.
-    checks = [('LC7_Emergency', f_) for f_ in (0.1, 0.3, 0.5, 0.75)] + \
-             [('LC3_Combined', 0.9), ('LC1_Maneuver', 0.9), ('Baseline', 0.9)]
+    # Buckling verification of the other candidate design points at the final
+    # wall: the governing case at the other fill levels, and the other load
+    # cases at the governing fill level.
+    checks = [(GOVERNING_CASE, f_) for f_ in fill_ratios if abs(f_ - GOVERNING_FILL) > 1e-9] + \
+             [(lc_, GOVERNING_FILL) for lc_ in reversed(list(ALL_LOAD_CASES)) if lc_ != GOVERNING_CASE]
     for lc_name, f_ in checks:
         P_gauge = P_STABILITY
-        r = run_case(lc_name, load_cases[lc_name], f_, seed_size,
+        r = run_case(lc_name, ALL_LOAD_CASES[lc_name], f_, seed_size,
                      '%sSZV_%s_f%02d_pmin' % (TAG_PREFIX, lc_name, int(round(f_ * 100))))
         if r:
             r['stage'] = 'verify, stability pressure'
@@ -2456,10 +2453,11 @@ def stage_sizing():
 
 def stage_matrix(pressure, label, tag_fmt, out_csv, ht_fmt=None, resume_glob=None):
     """
-    4 load cases x 5 fills at `pressure`. RESUMES: cases already in out_csv at
-    this wall and pressure are kept, not re-run. ht_fmt, if given, names the
-    heat-transfer job to reuse for each case (the stability matrix reuses
-    the production thermal fields, which are identical).
+    Every load case at every fill level at `pressure`. RESUMES: design points
+    already in out_csv (or in any file matching resume_glob) at this wall and
+    pressure are kept, not re-run. ht_fmt, if given, names the heat transfer
+    job to reuse for each design point (the stability matrix reuses the
+    production thermal fields, which are identical).
     """
     global P_gauge
     P_gauge = pressure
@@ -2489,17 +2487,21 @@ def stage_matrix(pressure, label, tag_fmt, out_csv, ht_fmt=None, resume_glob=Non
 
 
 def stage_convergence(pressure, label, out_csv, ht_label=None):
-    # PROCESS 7. LC7 fill 0.9 over a sweep of mesh densities, run at both
-    # pressures: the design pressure for the far-field von Mises stress and
-    # the stability pressure for the axial membrane stress the buckling
-    # screen consumes. Resumes per level; the stability-pressure sweep reuses
-    # the design-pressure thermal field of the same level.
+    """
+    PROCESS 7. The governing case over the mesh densities
+    convergence_fractions (seed = fraction x sqrt(R t)), run at both
+    pressures: the design pressure for the far-field von Mises stress and
+    the stability pressure for the axial membrane stress of the buckling
+    criterion. Resumes per level; the stability-pressure sweep reuses the
+    design-pressure thermal field of the same level.
+    """
     global P_gauge
     P_gauge = pressure
     rows = done_rows(out_csv, pressure)
     have = set(round(r['seed_mm'], 3) for r in rows)
-    print('\nMESH CONVERGENCE %s (%s, %.5f bar): LC7 fill 0.9, levels %s (%d already done)'
-          % (CASE_TAG, label, P_gauge / 1e5, convergence_fractions, len(have)))
+    print('\nMESH CONVERGENCE %s (%s, %.5f bar): %s fill %.2f, levels %s (%d already done)'
+          % (CASE_TAG, label, P_gauge / 1e5, GOVERNING_CASE, GOVERNING_FILL,
+             convergence_fractions, len(have)))
     for frac in convergence_fractions:
         sd = boundary_layer * frac
         if round(sd * 1e3, 3) in have:
@@ -2509,7 +2511,7 @@ def stage_convergence(pressure, label, out_csv, ht_label=None):
         src = os.path.join(os.getcwd(), 'HT_%sconv_%s_%s' % (TAG_PREFIX, ht_label, ftag)) \
             if ht_label else None
         print('  seed %.1f mm (%.2f elements per boundary layer)' % (sd * 1e3, 1.0 / frac))
-        r = run_case('LC7_Emergency', load_cases['LC7_Emergency'], 0.9, sd, tag, ht_from=src)
+        r = run_case(GOVERNING_CASE, GOVERNING_FACTORS, GOVERNING_FILL, sd, tag, ht_from=src)
         if r:
             rows.append(r)
             write_rows(out_csv, rows)
@@ -2517,17 +2519,59 @@ def stage_convergence(pressure, label, out_csv, ht_label=None):
     return rows
 
 
+# ============================================================================
+# DRY RUN: resolved inputs and first-order checks, no Abaqus model
+# ============================================================================
+# Closed-form values printed for a quick check of a new study: membrane hoop
+# stress pR/t, SP-8007 allowable, dry-wall temperature asymptote q/h_dry and
+# conduction length sqrt(k t / h_dry), shell edge decay length pi/beta with
+# beta = [3(1-nu^2)/(R t)^2]^(1/4), mesh size and number of analyses.
+if DRY_RUN:
+    _beta = (3.0 * (1.0 - nu * nu) / (R_mid * R_mid * t_wall * t_wall)) ** 0.25
+    _gam_phi = math.sqrt(R_mid / t_wall) / 16.0
+    _s_cl = E_mod * t_wall / (R_mid * math.sqrt(3.0 * (1.0 - nu * nu)))
+    _s_cr = (1.0 - 0.901 * (1.0 - math.exp(-_gam_phi))) * _s_cl
+    _n_el = A_shell / (seed_size * seed_size)
+    print('\nDRY RUN: inputs resolved, no model built')
+    print('-' * 78)
+    print('Design basis          : %s' % (DB.PATH if DB is not None else 'thesis values in this file'))
+    print('Material              : E %.1f GPa, nu %.2f, alpha %.2e 1/K, k %.0f W/m-K, Fty %.0f MPa'
+          % (E_mod / 1e9, nu, alpha, k_shell, Fty_RT / 1e6))
+    print('Margins               : yield %.2f -> allowable %.1f MPa; buckling %.2f'
+          % (SF, sigma_allow / 1e6, FOS_BUCKLING))
+    print('Pressures             : design %.4f bar, stability %.5f bar (gauge)' % (P_gauge / 1e5, P_STABILITY / 1e5))
+    print('Thermal               : T_liquid %.1f K, h_wetted %.0f, h_dry %.2f W/m2-K, q_MLI %.3f W/m2'
+          % (T_LH2, h_wetted, h_dry, q_outer))
+    print('Load cases            : ' + '; '.join('%s (%.1f, %.1f, %.1f)' % (k, v['nx'], v['ny'], v['nz'])
+                                                for k, v in load_cases.items()))
+    print('Fill levels           : %s' % fill_ratios)
+    print('Governing case        : %s at fill %.2f' % (GOVERNING_CASE, GOVERNING_FILL))
+    print('-' * 78)
+    print('Hoop stress pR/t      : %.1f MPa at the design pressure (von Mises 0.866 pR/t = %.1f MPa)'
+          % (P_gauge * R_mid / t_wall / 1e6, 0.866 * P_gauge * R_mid / t_wall / 1e6))
+    print('SP-8007 sigma_cr      : %.2f MPa, allowable %.2f MPa (R/t = %.0f)'
+          % (_s_cr / 1e6, _s_cr / FOS_BUCKLING / 1e6, R_mid / t_wall))
+    print('Dry-wall asymptote    : q/h_dry = %.3f K; conduction length %.3f m'
+          % (q_outer / h_dry, math.sqrt(k_shell * t_wall / h_dry)))
+    print('Edge decay length     : pi/beta = %.3f m; far-field exclusion %.2f m = %.1f decay lengths'
+          % (math.pi / _beta, FAR_FIELD_EXCLUSION, FAR_FIELD_EXCLUSION / (math.pi / _beta)))
+    print('Mesh                  : seed %.1f mm, of order %.0f elements (area / seed squared)' % (seed_size * 1e3, _n_el))
+    print('FINAL run             : %d production + %d stability + %d convergence analyses'
+          % (len(load_cases) * len(fill_ratios), len(load_cases) * len(fill_ratios), 2 * len(convergence_fractions)))
+    print('-' * 78)
+    raise SystemExit(0)
+
 results = []
 
-# Which FINAL stages to run (added 27 Sep 2026, for a time-limited session):
+# Which FINAL stages to run, for example in a time-limited session:
 #     set E190_STAGES=production            production only, then stop
-#     set E190_STAGES=stability             stability only (needs production first)
+#     set E190_STAGES=stability             stability only
 # Default: all four, in order.
 STAGES = [x.strip().lower() for x in os.environ.get(
     'E190_STAGES', 'sizing,production,stability,convergence').split(',') if x.strip()]
-# Guard (27 Sep 2026): a FINAL session that does not size must use the recorded
-# wall. If sized_walls.csv is missing or has no row for this aircraft, stop
-# rather than run the matrix at the AIRCRAFT_DATA fallback thickness.
+# Guard: a FINAL session that does not size must use the recorded wall. If
+# sized_walls.csv is missing or has no row for this aircraft, stop rather than
+# run the matrix at the starting thickness of AIRCRAFT_DATA.
 if RUN_MODE == 'FINAL' and 'sizing' not in STAGES:
     _have_row = os.path.exists(SIZED_WALLS) and any(
         r.get('aircraft') == CASE_TAG for r in csv.DictReader(open(SIZED_WALLS)))
@@ -2586,8 +2630,9 @@ if RUN_MODE == 'STABILITY' or (RUN_MODE == 'FINAL' and 'stability' in STAGES):
         os.chdir(_ROOT_DIR)
 
 if RUN_MODE == 'CONVERGENCE' or (RUN_MODE == 'FINAL' and 'convergence' in STAGES
-                                  and 'LC7_Emergency' in load_cases):
-    # (in a split FINAL session, only the window that owns LC7 runs it)
+                                  and GOVERNING_CASE in load_cases):
+    # (in a FINAL run split by E190_ONLY_LC, only the session that holds
+    # the governing case runs it)
     set_wall(t_wall)
     for pressure, label in ((P_DESIGN, 'pdesign'), (P_STABILITY, 'pmin')):
         out = os.path.join(_ROOT_DIR, '%s_convergence_%s_results.csv' % (CASE_TAG, label))

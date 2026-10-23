@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-INSULATION ARCHITECTURE: WHAT EACH OPTION WOULD NEED (28 Sep 2026)
-===================================================================
+INSULATION ARCHITECTURE: WHAT EACH OPTION WOULD NEED
+====================================================
 
 Evaluates the three insulation architectures of Chapter 3 against the same
 heat-leak budget, so that the selection rests on numbers from one script.
@@ -17,7 +17,10 @@ heat-leak budget, so that the selection rests on numbers from one script.
                     eps_eff = 1 / (1/eps1 + 1/eps2 - 1). The script returns the
                     emissivity both surfaces would need to meet the budget.
 
-    python code/2_requirements_and_sizing/insulation_sizing.py
+RUN      python code/2_requirements_and_sizing/insulation_sizing.py
+INPUTS   code/design_basis.json (geometry, temperatures, effective MLI
+         conductivity) and the heat leak budget of every aircraft
+OUTPUTS  results/processed/insulation.json and a printed table
 """
 import json
 import math
@@ -28,14 +31,14 @@ import os as _os
 import sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
 import repo_paths as RP  # noqa: E402  (folder layout of the repository)
+import design_basis as DB  # noqa: E402  (single source of the design inputs)
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import boiloff_holdtime_sensitivity as bh                     # noqa: E402
 
 SIGMA = 5.670374419e-8
 K_FOAM = 0.0163          # W/m-K, PUR-96, Bagarello et al. Table 1
-GEO = {'E190': (1.3015, 13.9675, 702.6), 'A320': (1.7080, 10.0120, 919.3),
-       'A350': (2.5771, 33.8240, 6583.2)}
+GEO = dict((ac, (DB.geometry(ac)['R'], DB.geometry(ac)['L'], DB.heat_budget(ac))) for ac in DB.AIRCRAFT)
 T_H, T_C = bh.T_AMBIENT, bh.T_LIQUID
 
 

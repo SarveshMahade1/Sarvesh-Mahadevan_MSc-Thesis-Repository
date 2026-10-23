@@ -1,23 +1,25 @@
 # -*- coding: utf-8 -*-
 """
-ALL DATA GRAPHS OF THE REPORT, FROM THE FINAL RESULTS (28 Sep 2026, v2)
-======================================================================
+ALL DATA GRAPHS OF THE REPORT, FROM THE FINAL RESULTS
+=====================================================
 
 Reads results/processed/final_numbers.json and results/processed/hand_calcs.json
 (written by final_numbers.py and hand_calcs.py) and draws every graph used in
 Chapters 3 to 5. Nothing is typed in by hand.
 
-Version 2 (readability):
+Conventions:
   * every graph is drawn at the full text width and included at \\textwidth,
     so the type prints at the size set here (10 pt labels, 9 pt ticks);
   * every line, marker and reference line in a figure is named in a legend
     placed below the panels, never on top of the data;
-  * no free text is written inside the axes; what a text label used to say
-    is now either a legend entry or in the caption.
+  * explanations are legend entries or in the caption of the report, not
+    free text inside the axes;
+  * the panel convention of thesis_figstyle.py (one quantity per panel, the
+    value next to every point).
 
-    python code/3_results_processing/final_numbers.py
-    python code/3_results_processing/hand_calcs.py
+RUN (after final_numbers.py, hand_calcs.py and review_checks.py):
     python code/4_figures_and_drawings/plot_final_figures.py
+OUTPUT: thesis_figures/*.pdf and *.png (RP.FIGURES)
 """
 import csv
 import json
@@ -67,7 +69,7 @@ def series(ac, lc, k, stage='production'):
 
 
 def title(ax, s):
-    # Review, Oct 2026: no overhead titles; the panel letter only, the rest
+    # No overhead titles: the panel letter only, the rest
     # is said in the caption of the report.
     ax.set_title(s.split(')')[0] + ')', loc='left', fontsize=10)
 
@@ -224,7 +226,7 @@ def fig_stress_vs_head():
 
 
 def fig_sensitivity_vs_tilt():
-    # Review, Oct 2026: the change with fill is plotted against the quantity the
+    # The change with fill is plotted against the quantity the
     # mechanism says controls it, the hydrostatic head relative to the gauge
     # pressure at full fill, p_{\mathrm{h}}/p = rho |n| g d / p (magnitude AND depth),
     # and, for LC7, against the liquid depth along g_hat, which is set by the
@@ -260,7 +262,7 @@ def fig_sensitivity_vs_tilt():
 
 
 def fig_three_aircraft():
-    # Review, Oct 2026: absolute far-field stress in MPa, with the allowable drawn.
+    # Absolute far-field stress in MPa, with the allowable drawn.
     fig, axs = plt.subplots(1, 2, figsize=(W, 2.9), sharey=True)
     for ax, lc, t in zip(axs, ('Baseline', 'LC7_Emergency'), ('(a)', '(b)')):
         for ac in AC:
@@ -326,7 +328,7 @@ def fig_reactions():
 
 
 def fig_margins():
-    # Review, Oct 2026: one convention, reserve factor RF = allowable / applied,
+    # One convention: reserve factor RF = allowable / applied,
     # with the project margin of 1.5 inside both allowables; requirement RF >= 1.
     fig, axs = plt.subplots(1, 2, figsize=(W, 3.0))
     for ac in AC:
@@ -398,7 +400,7 @@ def fig_ovality():
 
 
 # ---------------------------------------------------------------------------
-# Absolute-axis versions (October 2026): the same data as fig5_stress_vs_head
+# Absolute-axis versions: the same data as fig5_stress_vs_head
 # and fig5_sensitivity, but in MPa and kPa, one line per load case connecting
 # the five fill levels in order, so that each point can be read physically.
 # ---------------------------------------------------------------------------
@@ -473,8 +475,8 @@ def fig_stress_increase_abs():
 
 
 # ---------------------------------------------------------------------------
-# One column per load case (October 2026): Baseline, LC3, LC7 shown apart so
-# that each load case can be read on its own.
+# One column per load case: Baseline condition, combined manoeuvre and
+# emergency landing shown apart, so that each can be read on its own.
 # ---------------------------------------------------------------------------
 SPLIT = [('Baseline', '(a)', '(d)'), ('LC3_Combined', '(b)', '(e)'), ('LC7_Emergency', '(c)', '(f)')]
 
@@ -540,7 +542,7 @@ def fig_stress_vs_pressure_by_case():
 
 
 # ---------------------------------------------------------------------------
-# One figure per load case (October 2026): each figure has its own scales so
+# One figure per load case: each figure has its own scales so
 # that small values remain visible, and the values at the lowest and highest
 # fill level are written next to the points so that load cases can still be
 # compared across figures. (a) cause, (b) effect, (c) the relation between them.
@@ -626,7 +628,7 @@ def fig_case(lc):
 
 
 # ---------------------------------------------------------------------------
-# The remaining result graphs in the same panel convention (October 2026)
+# The remaining result graphs in the same panel convention
 # ---------------------------------------------------------------------------
 LC_SHORT = {'Baseline': 'Baseline', 'LC1_Maneuver': 'Symmetric\nmanoeuvre', 'LC3_Combined': 'Combined\nmanoeuvre',
             'LC7_Emergency': 'Emergency\nlanding'}
@@ -833,10 +835,10 @@ def fig_margins_panels():
 
 
 if __name__ == '__main__':
-    # Figures used in the report (October 2026 panel convention). The older
-    # combined figures (fig_e190_matrix, fig_head_mechanism, fig_stress_vs_head,
-    # fig_three_aircraft, fig_sensitivity_vs_tilt, fig_thermal, fig_margins)
-    # remain above for reference but are no longer called.
+    # Figures used in the report (panel convention). The combined figures
+    # fig_e190_matrix, fig_head_mechanism, fig_stress_vs_head,
+    # fig_three_aircraft, fig_sensitivity_vs_tilt, fig_thermal and fig_margins
+    # are alternative layouts of the same data, kept for reuse but not called.
     for f in (fig_sizing_history, fig_e190_matrix_panels,
               fig_sensitivity_bars, fig_thermal_panels, fig_margins_panels, fig_convergence):
         f()

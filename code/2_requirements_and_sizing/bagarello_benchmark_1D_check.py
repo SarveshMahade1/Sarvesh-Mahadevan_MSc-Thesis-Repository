@@ -5,10 +5,14 @@ ANALYTICAL PRE-CHECK OF THE BAGARELLO BENCHMARK
 Pure Python - TU Delft MSc thesis
 
 Author: Sarvesh Mahadevan
-Date: September 2026
+
+RUN      python code/2_requirements_and_sizing/bagarello_benchmark_1D_check.py
+INPUTS   the published data of Bagarello et al. written below (no files)
+OUTPUTS  printed comparison of heat leak, boil-off rate and dry-wall
+         temperature with the published values
 
 --------------------------------------------------------------------------------
-WHY THIS SCRIPT EXISTS
+PURPOSE
 --------------------------------------------------------------------------------
 Bagarello, Campagna & Benedetti (2026) report, for their reference tank at a
 filling ratio of 0.75, a boil-off rate of 12.03 kg/h and a peak liner
@@ -22,8 +26,8 @@ with a 1-D resistance network before any finite element work is done, for two
 reasons:
 
   1. If the hand calculation cannot get close to 12.03 kg/h and 25.3 K, the
-     FEM will not either, and the problem is in the physics or the property
-     data rather than in the mesh. Far cheaper to find out here.
+     finite element model will not either, and the problem lies in the
+     physics or the property data rather than in the mesh.
 
   2. Their external convection coefficient is not quoted in the text. Rather
      than assume one, it is DERIVED here from the Churchill-Chu correlation
@@ -64,8 +68,8 @@ DATA SOURCES
 KEY FINDING
 --------------------------------------------------------------------------------
 The PUR foam carries about 98.5 percent of the total thermal resistance. Both
-parameters that had to be assumed here - the CFRP conductivity and the external
-film coefficient - therefore have almost no influence, which means the
+parameters that had to be assumed here, the CFRP conductivity and the external
+film coefficient, therefore have almost no influence, which means the
 benchmark rests on Bagarello's own published foam conductivity and thickness
 rather than on anything assumed in this script.
 ================================================================================

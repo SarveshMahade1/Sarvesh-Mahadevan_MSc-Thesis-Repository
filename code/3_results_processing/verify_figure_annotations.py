@@ -1,5 +1,5 @@
 """
-VERIFICATION OF EVERY NUMBER WRITTEN INSIDE THE REPORT FIGURES (October 2026)
+VERIFICATION OF EVERY NUMBER WRITTEN INSIDE THE REPORT FIGURES
 
 Each annotation of the Chapter 3 and Chapter 5 graphs is recomputed here from
 first principles or from the raw result files, independently of the plotting

@@ -1,7 +1,11 @@
 #!/bin/bash
 # =============================================================================
-# REMAINING FINAL STAGES ON DELFTBLUE (stability and mesh convergence)
-# TU Delft MSc thesis, Sarvesh Mahadevan, 27 Sep 2026
+# FINAL STAGES ON THE DELFTBLUE CLUSTER (SLURM job script)
+# TU Delft MSc thesis, Sarvesh Mahadevan
+#
+# Runs one stage of E190_MASTER_thermo_structural.py (RUN_MODE FINAL) for one
+# aircraft. In the thesis the stability and mesh convergence stages were run
+# here, after the sizing and production stages on the workstation.
 #
 # One SLURM job = one aircraft x one stage. Submit six of them:
 #
@@ -14,16 +18,16 @@
 #   squeue --me                 status
 #   tail -f slurm-<jobid>.out   live output
 #
-# Quick comparison test against the laptop (one case, about 10 minutes):
+# Quick comparison test against the workstation (one case, about 10 minutes):
 #   see the header of code/3_results_processing/compare_delftblue_test.py
 #
 # Folder layout expected in /scratch/$USER/thesis:
 #   sized_walls.csv
 #   code/1_abaqus_model/run_final_delftblue.sh
 #
-# The wall thickness is read from sized_walls.csv, exactly as on the laptop.
+# The wall thickness is read from sized_walls.csv, as on the workstation.
 # Sizing and production are NOT re-run (E190_STAGES holds only the one stage).
-# The laptop thermal results are not available here, so each stability case
+# The workstation thermal results are not available here, so each stability case
 # solves its own heat transfer job first (same model, same seed); the MASTER
 # does this automatically when no reusable thermal result is found.
 #
@@ -63,7 +67,7 @@ export E190_STAGES="$STAGE"
 
 module load abaqus/2024
 # CAE links against libraries the compute nodes do not have (checked with ldd
-# on a compute node, 27 Sep). /scratch/$USER/libs holds:
+# on a compute node). /scratch/$USER/libs holds:
 #   libjpeg.so.62  copied from /usr/lib64 on the login node
 #   libGLU.so.1    link to the 2025 stack module mesa-glu/9.0.2
 #   libOSMesa.so.6 link to libOSMesa.so.8 of the 2025 stack module mesa/23.3.6

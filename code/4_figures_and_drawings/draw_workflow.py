@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-DIGITALIZED WORKFLOW DIAGRAM (October 2026)
+DIGITALIZED WORKFLOW DIAGRAM
 
 Draws the flow of the workflow as one figure for Chapter 4 of the report:
 the centre column is the sequence of stages, the boxes on the left are the
 inputs of each stage, and the shaded boxes on the right are its outputs and
 checks. The loop on the left is the finite element sizing of the wall.
 
-    python draw_workflow.py [output folder]
+    python code/4_figures_and_drawings/draw_workflow.py [output folder]
+
+Output: fig4_workflow.pdf and fig4_workflow.png in the output folder
+(reproduce_all.py passes thesis_figures).
 """
 import os
 import sys

@@ -1,20 +1,24 @@
 # -*- coding: utf-8 -*-
 """
 ================================================================================
-CLOSED-FORM WALL SIZING - CORRECTED SIZING BASIS (27 Sep 2026)
+CLOSED-FORM WALL SIZING: STARTING WALLS FOR THE FINITE ELEMENT SIZING
 TU Delft MSc thesis - Sarvesh Mahadevan
 ================================================================================
 
-WHY THIS EXISTS
-    The Abaqus sizing runs of 27 Aug (E190) and 26 Sep (A320, A350) applied the
-    design pressure to SIDE1 of their shell surfaces, which on those meshes is
-    the OUTER face: the 1.5 bar acted as external pressure. The buckling screen
-    then read the resulting hoop compression (-pR/t) as axial compression. The
-    run logs show it directly: the "compressive axial membrane stress" equals
-    pR/t to within 0-17 % at every thickness tried, in every load case. The
-    wall thicknesses 4.785 / 6.382 / 9.948 mm are therefore not sized by any
-    valid criterion. This script gives the corrected closed-form sizing; the
-    finite-element model then verifies the result on campus.
+RUN      python code/2_requirements_and_sizing/sizing_closed_form.py
+INPUTS   code/design_basis.json (geometry, material, margins, pressures, load
+         cases, fill levels)
+OUTPUT   printed table: the closed-form wall of each aircraft (buckling at
+         1.5 against SP-8007), its yield reserve and the governing design
+         points; these walls are t_wall_initial_m of the design basis
+
+PURPOSE
+    A closed-form estimate of the wall from the buckling and the yield
+    criterion, as the starting point of the finite element sizing loop
+    (E190_MASTER_thermo_structural.py, RUN_MODE SIZING). An earlier set of
+    walls (4.785, 6.382 and 9.948 mm) came from sizing runs with the pressure
+    on the outer face of the shell and is printed for comparison only; see
+    code/1_abaqus_model/DEVELOPMENT_NOTES.md.
 
 PHYSICS (every term is a standard closed form; sources in brackets)
     Barrel far field, rings at x = 0, L/2, L (aft sliding, mid anchor, fwd
@@ -52,23 +56,26 @@ DESIGN BASIS (pressures from Chapter 3)
     STRENGTH   at the MAXIMUM design differential, 1.5 bar gauge (Chapter 3).
     Target     FOS 1.5 against s_cr; von Mises <= 262 MPa (FOS 1.5 on F_ty).
 
-This is a SIZING ESTIMATE. The finite-element model verifies it at the chosen
-thickness (E190_MASTER_thermo_structural.py, RUN_MODE='SIZING_CHECK').
+This is a SIZING ESTIMATE. The finite-element model sizes the wall from it
+(E190_MASTER_thermo_structural.py, RUN_MODE SIZING).
 ================================================================================
 """
 import math
+import os
+import sys
 
-E, NU, RHO_AL, RHO_LH2, G = 73.1e9, 0.33, 2850.0, 70.8, 9.81
-F_TY, SF = 393e6, 1.5
-P_MAX = 150000.0                       # Pa gauge, strength
-P_MIN = 120000.0 - 101325.0            # Pa gauge, stability
-FOS_BUCKLING = 1.5
-LOAD_CASES = {'Baseline': (0, 0, 1), 'LC1_Maneuver': (0, 0, 2.5),
-              'LC3_Combined': (1.5, 0, 2.5), 'LC7_Emergency': (9, 3, 6)}
-FILLS = (0.1, 0.3, 0.5, 0.75, 0.9)
-AIRCRAFT = {'A320': (1.7080, 10.0120), 'E190': (1.3015, 13.9675),
-            'A350': (2.5771, 33.8240)}      # R_mid, L_barrel  (AIRCRAFT_DATA)
-OLD_T = {'A320': 6.382, 'E190': 4.785, 'A350': 9.948}
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import design_basis as DB  # noqa: E402  (single source of the design inputs)
+
+E, NU, RHO_AL, RHO_LH2, G = DB.MAT['E_Pa'], DB.MAT['nu'], DB.MAT['rho_kg_m3'], DB.MISSION['rho_lh2_kg_m3'], DB.G
+F_TY, SF = DB.MAT['Fty_Pa'], DB.CRIT['yield_margin']
+P_MAX = DB.P_DESIGN                    # Pa gauge, strength
+P_MIN = DB.P_STABILITY                 # Pa gauge, stability
+FOS_BUCKLING = DB.CRIT['buckling_margin']
+LOAD_CASES = dict(DB.LOAD_CASES)
+FILLS = tuple(DB.FILLS)
+AIRCRAFT = dict((ac, (DB.geometry(ac)['R'], DB.geometry(ac)['L'])) for ac in DB.AIRCRAFT)   # R_mid, L_barrel
+OLD_T = {'A320': 6.382, 'E190': 4.785, 'A350': 9.948}   # walls of an early draft (pressure on the outer face), for comparison
 
 
 def geometry(R, L):
@@ -150,10 +157,12 @@ if __name__ == '__main__':
     for ac, (R, L) in AIRCRAFT.items():
         t, (bf, bat), (yf, yat) = size(R, L)
         print('%-5s  %6.3f mm  %6.3f mm  %-28s  %10.2f  %-26s'
-              % (ac, t * 1e3, OLD_T[ac], '%s f=%.2f (%.1f MPa)' % (bat[0], bat[1], bat[2] / 1e6),
+              % (ac, t * 1e3, OLD_T.get(ac, float('nan')), '%s f=%.2f (%.1f MPa)' % (bat[0], bat[1], bat[2] / 1e6),
                  yf, '%s f=%.2f (%.1f MPa)' % (yat[0], yat[1], yat[2] / 1e6)))
     print('\nAt the OLD thicknesses, with the corrected physics:')
     for ac, (R, L) in AIRCRAFT.items():
+        if ac not in OLD_T:
+            continue
         t = OLD_T[ac] / 1e3
         bf, bat = buckling_fos(R, L, t)
         yf, yat = yield_fos(R, L, t)

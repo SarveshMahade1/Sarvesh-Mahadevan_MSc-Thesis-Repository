@@ -1,0 +1,32 @@
+{
+ "E190": {
+  "label": "E190",
+  "V_m3": 80.1,
+  "sealed_mass_kg": 5454.1,
+  "delta_u_J_per_kg": 6809.38,
+  "hold_time_h": 14.683,
+  "Q_budget_W": 702.6,
+  "Q_24h_W": 429.7,
+  "Q_in_design_basis_W": 702.6
+ },
+ "A320": {
+  "label": "A320",
+  "V_m3": 104.803,
+  "sealed_mass_kg": 7136.1,
+  "delta_u_J_per_kg": 6809.38,
+  "hold_time_h": 14.683,
+  "Q_budget_W": 919.3,
+  "Q_24h_W": 562.3,
+  "Q_in_design_basis_W": 919.3
+ },
+ "A350": {
+  "label": "A350-900",
+  "V_m3": 750.537,
+  "sealed_mass_kg": 51104.5,
+  "delta_u_J_per_kg": 6809.38,
+  "hold_time_h": 14.683,
+  "Q_budget_W": 6583.2,
+  "Q_24h_W": 4026.7,
+  "Q_in_design_basis_W": 6583.2
+ }
+}

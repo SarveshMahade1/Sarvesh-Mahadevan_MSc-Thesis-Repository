@@ -8,7 +8,7 @@ earlier_draft_figures/, so it can never overwrite thesis_figures/.
 TU Delft MSc thesis - Sarvesh Mahadevan
 ================================================================================
 
-Assembles the Abaqus renders in abaqus_captures_v2 into report figures that
+Assembles the Abaqus renders in abaqus_contour_captures into figures that
 show the SAME case for all three aircraft, so the reader sees that one
 procedure produced three comparable results.
 
@@ -20,10 +20,10 @@ procedure produced three comparable results.
   - the mesh figure is drawn to ONE length scale, so the three tanks can be
     compared by eye.
 
-Inputs : abaqus_captures_v2\\_raw\\<AC>\\<name>__L.png / __N.png  (contours)
-         abaqus_captures_v2\\<AC>\\<AC>_MESH_front.png            (meshes)
-         abaqus_captures_v2\\capture_log.txt                      (element counts)
-Outputs: latex\\figures\\37_... to 40_... and appx_contours_<AC>_*.{pdf,png}
+Inputs : abaqus_contour_captures/_raw/<AC>/<name>__L.png / __N.png  (contours)
+         abaqus_contour_captures/<AC>/<AC>_MESH_front.png            (meshes)
+         abaqus_contour_captures/capture_log.txt                      (element counts)
+Outputs: earlier_draft_figures/37_... to 40_... and appx_contours_<AC>_*.{pdf,png}
 
 RUN (from the thesis root):   python code/4_figures_and_drawings/make_contour_panels.py
 ================================================================================
@@ -47,10 +47,10 @@ sys.path.insert(0, SCRIPT_DIR)
 import thesis_figstyle as tfs                     # noqa: E402
 import compose_side_legend as csl                 # noqa: E402
 
-CAP = RP.CAPTURES   # 28 Sep: sized walls
+CAP = RP.CAPTURES   # captures at the sized walls
 FIGDIR = RP.EARLIER_DRAFT   # never RP.FIGURES: the final figures come from make_report_contours.py
 os.makedirs(FIGDIR, exist_ok=True)
-NAVY, GREY = '#000000', '#000000'    # 28 Sep: all figure text black, as in the report
+NAVY, GREY = '#000000', '#000000'    # all figure text black, as in the report
 
 ORDER = ['E190', 'A320', 'A350']                  # table order of the report
 NAME = {'A320': 'A320', 'E190': 'E190', 'A350': 'A350-900'}

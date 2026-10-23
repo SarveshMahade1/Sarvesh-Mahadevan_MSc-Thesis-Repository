@@ -1,13 +1,21 @@
 # -*- coding: utf-8 -*-
 """
-REVIEW CHECKS (October 2026)
-Closed-form and volume-sampling checks added in response to the supervisors'
-review of the thesis report. No Abaqus input is needed; every number printed
-here is reproduced in the revised report or in the response to the comments.
+REVIEW CHECKS
+Closed-form and volume-sampling checks behind statements of the thesis report,
+several of them raised in the supervisors' review. No Abaqus input is needed.
+
+RUN      python code/3_results_processing/review_checks.py
+         (after final_numbers.py and hand_calcs.py; needs CoolProp)
+INPUTS   code/design_basis.json, results/processed/final_numbers.json,
+         results/processed/hand_calcs.json, results/benchmark_bagarello/
+OUTPUTS  results/processed/review_checks.json and a printed summary
+
+Load-case codes as in the results files: LC1 symmetric manoeuvre, LC3 combined
+manoeuvre, LC7 emergency landing; Fwd9only is a pure 9 g forward load.
 
   1. Liquid depth and hydrostatic head for a pure 9 g forward load, to state
-     the severity of the combined LC7 case as a stress ratio rather than a
-     load-factor ratio.
+     the severity of the emergency landing (combined factors) as a stress
+     ratio rather than a load-factor ratio.
   2. Split of the change in head ratio p_h/p between load cases into a
      magnitude factor |n| and a depth factor d (orientation), so that the
      report does not attribute to direction alone what is a product of both.
@@ -31,7 +39,8 @@ here is reproduced in the revised report or in the response to the comments.
      P = K rho g L, for a tank within the fuselage: K = 9 forward and 6
      downward, L the distance to the farthest tank boundary in the loading
      direction (total length forward, diameter downward), tank full. These are
-     ultimate pressures; they are compared with the LC7 head at fill 0.90.
+     ultimate pressures; they are compared with the emergency landing head
+     at fill 0.90.
   9. Benchmark without circularity. The flux of the original benchmark run
      (8.0 W/m2) came from Bagarello's computed outer temperature of 282.2 K.
      The 1-D network of bagarello_benchmark_1D_check.py derives the flux from
@@ -39,7 +48,7 @@ here is reproduced in the revised report or in the response to the comments.
      model is linear in the flux, so the peak liner temperature of the FE run
      scales to that flux exactly: T = T_min + (T_max - T_min) q_1D / q_run.
  10. Reserve factors at the three mesh levels of the convergence study
-     (LC7, fill 0.90), from final_numbers.json.
+     (emergency landing, fill 0.90), from final_numbers.json.
  11. Derived figures quoted in the report text: fill sensitivity divided by
      the head ratio at fill 0.90, fall of dT with fill at rest, error of the
      bowing estimate against the model, lowest buckling RF per load case,

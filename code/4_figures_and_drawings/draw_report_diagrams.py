@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-THE THREE DRAWN DIAGRAMS KEPT IN THE REPORT (28 Sep 2026)
-=========================================================
+THE THREE DRAWN DIAGRAMS OF THE REPORT
+======================================
 
 Drawn at their printed width (0.8 of the text width) in the report typeface,
 with every number taken from the results files:
@@ -9,11 +9,14 @@ with every number taken from the results files:
   fig3_resistance_network  the wall stack as thermal resistances in series,
                            E190, with the share of each layer computed here
   fig3_wall_stack          the E190 wall stack at true relative thickness
-  fig4_free_surface        the E190 free surface at phi_f = 0.90, vertical
-                           and LC7 resultant, from the same volume-sampling
-                           rule as the model
+  fig4_free_surface        the E190 free surface at phi_f = 0.90, for a
+                           vertical load factor and the emergency landing
+                           resultant, from the same volume-sampling rule as
+                           the model
 
-    python code/4_figures_and_drawings/draw_report_diagrams.py
+RUN      python code/4_figures_and_drawings/draw_report_diagrams.py
+INPUTS   results/processed/final_numbers.json, results/processed/insulation.json
+OUTPUT   thesis_figures/fig3_*.pdf/png and fig4_free_surface.pdf/png
 """
 import json
 import math
@@ -38,7 +41,7 @@ FIG = RP.FIGURES
 D = json.load(open(os.path.join(RP.PROCESSED, 'final_numbers.json')))
 I = json.load(open(os.path.join(RP.PROCESSED, 'insulation.json')))
 W = tfs.FIG_W
-# black and white (28 Sep 2026): grey levels only
+# black and white: grey levels only
 C_WALL, C_MLI, C_JACK, C_FILM = '#404040', '#f2f2f2', '#a6a6a6', '#d9d9d9'
 C_LIQ = '#e6e6e6'
 

@@ -4,23 +4,22 @@ DERIVATION OF THE BOIL-OFF / HEAT-LEAK REQUIREMENT FROM A NO-VENT HOLD TIME
 Pure Python + CoolProp (no Abaqus needed) - TU Delft MSc thesis
 
 Author: Sarvesh Mahadevan
-Date: September 2026
+
+RUN      python code/2_requirements_and_sizing/boiloff_requirement_derivation.py
+INPUTS   code/design_basis.json: pressures (fill, vent), hold fill level, h_fg,
+         boil-off fraction, and the tank geometry of every aircraft
+         (needs CoolProp)
+OUTPUTS  results/processed/heat_budget.json (sealed mass, delta_u, hold time
+         and heat leak budget per aircraft) and the printed derivation
 
 --------------------------------------------------------------------------------
-WHY THIS SCRIPT EXISTS
+PURPOSE
 --------------------------------------------------------------------------------
-The insulation in this thesis was previously sized against an ASSUMED boil-off
-target of 0.1 %/hr of tank capacity, adopted from the literature and then
-locked. That number was never derived, and the citation attached to it was
-incorrect.
-
-This script replaces the assumption with a derivation. It follows the approach
-of Winnefeld et al. (2018), who do not assume a %/hr figure at all: they size
-the insulation from a physically meaningful operational requirement, namely
-that the tank must be able to sit sealed for a required hold time without the
-pressure reaching the relief-valve setting.
-
-The %/hr figure then becomes an OUTPUT of the derivation, not an input.
+The heat leak budget is derived from an operational requirement instead of
+being assumed as a boil-off percentage. The approach follows Winnefeld et al.
+(2018), who size the insulation so that the tank can sit sealed for a
+required hold time without the pressure reaching the relief-valve setting.
+The %/hr figure is then an OUTPUT of the derivation, not an input.
 
 --------------------------------------------------------------------------------
 THE PHYSICS
@@ -75,7 +74,7 @@ DATA SOURCES (every number traced)
 4. Maximum fill fraction 0.97. Winnefeld et al. (2018), after Verstraete - an
    ullage volume is required so that the tank is never liquid-full.
 
-5. Tank geometry: from the three MASTER thermo-structural scripts.
+5. Tank geometry: code/design_basis.json, through design_basis.geometry().
 
 --------------------------------------------------------------------------------
 KEY RESULT
@@ -89,7 +88,14 @@ design requirement across a regional, a narrow-body and a wide-body aircraft.
 ================================================================================
 """
 
+import json
 import math
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import repo_paths as RP          # noqa: E402
+import design_basis as DB        # noqa: E402  (single source of the design inputs)
 
 try:
     import CoolProp.CoolProp as CP
@@ -103,31 +109,28 @@ FLUID = 'ParaHydrogen'
 # ============================================================================
 
 # --- Operating pressures (see DATA SOURCES 2 and 3) ---
-P_FILL = 1.2e5      # Pa, fill / minimum pressure          [Winnefeld, Verstraete]
-P_VENT = 1.448e5    # Pa, relief-valve / venting pressure  [Winnefeld, after Brewer]
+P_FILL = DB.PRESS['p_fill_abs_Pa']    # Pa, fill / minimum pressure          [Winnefeld, Verstraete]
+P_VENT = DB.PRESS['p_vent_abs_Pa']    # Pa, relief-valve / venting pressure  [Winnefeld, after Brewer]
 
 # --- Maximum fill fraction (see DATA SOURCE 4) ---
-FILL_FRACTION = 0.97
+FILL_FRACTION = DB.BUDGET['hold_fill_level']
 
 # --- Latent heat used by the existing thermal scripts, kept for consistency ---
-H_FG = 446000.0     # J/kg
+H_FG = DB.BUDGET['h_fg_J_per_kg']     # J/kg
 
 # --- The previously assumed target, retained only for back-comparison ---
-LEGACY_BOILOFF_PCT_PER_HR = 0.1
+LEGACY_BOILOFF_PCT_PER_HR = 100.0 * DB.BUDGET['boiloff_fraction_per_h']
 
 # --- Tank geometry, matching the MASTER thermo-structural scripts ---
 #     R_mid  : mid-surface radius of the inner vessel            [m]
 #     L_bar  : cylindrical barrel length                         [m]
 #     cap_ar : end-cap aspect ratio a/b (semi-ellipsoidal)        [-]
-AIRCRAFT = {
-    # E190 L_bar is back-solved from the capacity hard-coded in the E190
-    # vacuum/MLI sizing script (m_LH2_capacity = 5670.9 kg at rho = 70.8
-    # kg/m3, i.e. V = 80.098 m3). The resulting total length, 15.594 m,
-    # reproduces L_tank in that script exactly - a useful check.
-    'E190':     dict(R_mid=1.3015, L_bar=13.9675, cap_ar=1.6),
-    'A320':     dict(R_mid=1.7080, L_bar=10.0120, cap_ar=1.6),
-    'A350-900': dict(R_mid=2.5771, L_bar=33.8240, cap_ar=1.6),
-}
+# Geometry of every aircraft in code/design_basis.json (model geometry, as built
+# by the MASTER script). For the E190 the barrel length was fixed earlier in
+# the project from a tank volume of 80.10 m3.
+AIRCRAFT = dict((DB.label(ac), dict(R_mid=DB.geometry(ac)['R'], L_bar=DB.geometry(ac)['L'],
+                                    cap_ar=DB.geometry(ac)['cap_aspect'], key=ac))
+                for ac in DB.AIRCRAFT)
 
 # Hold times reported in the sensitivity sweep [hours]
 HOLD_TIMES_H = [1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 24, 36, 48]
@@ -280,7 +283,7 @@ def main():
             print("  %11d | %12.1f | %12.4f | %8.2f" % (th, Q, pct, pct * 24))
 
         summary[name] = dict(V=V, m_total=m_total, delta_u=delta_u,
-                             t_equiv_h=t_equiv_h, Q_legacy=Q_legacy)
+                             t_equiv_h=t_equiv_h, Q_legacy=Q_legacy, key=g['key'])
 
     print("")
     print("=" * 78)
@@ -299,6 +302,21 @@ def main():
     print("  venting pressures alone and is therefore the SAME for every")
     print("  aircraft. This is what makes it a valid common design requirement.")
     print("=" * 78)
+
+    # Machine-readable record for the rest of the workflow.
+    out = {}
+    for name, s in summary.items():
+        out[s['key']] = dict(label=name, V_m3=round(s['V'], 3), sealed_mass_kg=round(s['m_total'], 1),
+                             delta_u_J_per_kg=round(s['delta_u'], 2), hold_time_h=round(s['t_equiv_h'], 3),
+                             Q_budget_W=round(s['Q_legacy'], 1),
+                             Q_24h_W=round(s['Q_legacy'] * DB.BUDGET['hold_time_h'] / 24.0, 1),   # scaled as in the thesis, Table 3.4
+                             Q_in_design_basis_W=DB.heat_budget(s['key']))
+    if not os.path.isdir(RP.PROCESSED):
+        os.makedirs(RP.PROCESSED)
+    path = os.path.join(RP.PROCESSED, 'heat_budget.json')
+    with open(path, 'w') as f:
+        json.dump(out, f, indent=1)
+    print("written %s" % path)
 
 
 if __name__ == '__main__':
